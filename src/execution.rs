@@ -14,7 +14,30 @@ pub struct MacroError {
     pub range: Range<usize>,
 }
 
+impl MacroError {
+	/// Creates an error.
+	#[must_use]
+	pub fn new(name: String, range: Range<usize>, kind: MacroErrorKind) -> Self {
+		MacroError { name, range, error_type: kind }
+	}
+}
+
+impl MacroErrorKind {
+	/// Creates a user error.
+	#[must_use]
+	pub fn user(message: impl Into<String>) -> Self {
+		MacroErrorKind::User { message: message.into() }
+	}
+
+	/// Creates an error about not having enough arguments.
+	#[must_use]
+	pub fn not_enough_args(expected: usize, found: usize) -> Self {
+		MacroErrorKind::NotEnoughArguments { expected, found }
+	}
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[allow(missing_docs)]
 /// A kind of error that can occur when a macro is executed.
 pub enum MacroErrorKind {
 	/// Not enough arguments were supplied.
@@ -105,7 +128,7 @@ macro_rules! throw_error {
 /// Errors if any macro in the input errors.
 pub fn apply_macros(
     input: String,
-    macros: &HashMap<String, &dyn Macro>,
+    macros: &HashMap<String, &dyn Macro, impl std::hash::BuildHasher>,
 ) -> Result<String, MacroError> {
     let input_len = input.len();
     let mut variables: HashMap<String, String> = HashMap::new();
