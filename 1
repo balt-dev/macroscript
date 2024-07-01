@@ -1,0 +1,42 @@
+    Checking macroscript v0.1.0 (/home/balt/Documents/macroscript)
+error: expected expression, found `let` statement
+   --> src/stdlib.rs:196:23
+    |
+196 |                let Some(exp) = let Some(first_arg) = arguments.get(1) else {
+    |                                ^^^
+    |
+    = note: only supported directly in conditions of `if` and `while` expressions
+
+warning: unused macro definition: `count`
+ --> src/stdlib.rs:8:14
+  |
+8 | macro_rules! count {
+  |              ^^^^^
+  |
+  = note: `#[warn(unused_macros)]` on by default
+
+error[E0308]: mismatched types
+   --> src/stdlib.rs:128:11
+    |
+128 |                let (first_arg, ) = get_args!("unescape", range, arguments; first_arg);
+    |                    ^^^^^^^^^^^^^   -------------------------------------------------- this expression has type `()`
+    |                    |
+    |                    expected `()`, found `(_,)`
+    |
+    = note: expected unit type `()`
+                   found tuple `(_,)`
+
+error[E0308]: mismatched types
+   --> src/stdlib.rs:189:73
+    |
+189 |         fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+    |            -----                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Result<String, MacroError>`, found `()`
+    |            |
+    |            implicitly returns `()` as its body has no tail or `return` expression
+    |
+    = note:   expected enum `Result<String, MacroError>`
+            found unit type `()`
+
+For more information about this error, try `rustc --explain E0308`.
+warning: `macroscript` (lib) generated 1 warning
+error: could not compile `macroscript` (lib) due to 3 previous errors; 1 warning emitted
