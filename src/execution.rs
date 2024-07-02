@@ -1,3 +1,4 @@
+//! Contains items pertaining to execution of macros on a given string.
 use crate::parsing;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -87,9 +88,11 @@ macro_rules! throw_error {
 	($label: tt, $try_stack: ident, $expr: expr) => {
 		let err = $expr;
 		if let Some((parent, par_range)) = $try_stack.last_mut() {
-			parent.replace_range(par_range.clone(), &format!("false/{}",
-				format!("{err}").replace("\\", r"\\").replace("[", r"\[").replace("]", r"\]")
-			));
+			let replace = &format!("false/{}", err.error_type)
+					.replace("\\", r"\\")
+					.replace("[", r"\[")
+					.replace("]", r"\]");
+			parent.replace_range(par_range.clone(), replace);
 			continue $label;
 		}
 		return Err($expr);
@@ -133,7 +136,7 @@ pub fn apply_macros(
     let input_len = input.len();
     let mut variables: HashMap<String, String> = HashMap::new();
     let mut try_stack = vec![(input, 0..input_len)];
-    'try_loop: while let Some((mut input, range)) = try_stack.pop() {
+    'try_loop: while let Some((mut input, range)) = try_stack.pop() { // pop isn't optimal here, but would take a huge refactor
         while let Some(macro_range) = parsing::find_pair(&input) {
             match &*macro_range.name {
                 "try" => {
@@ -162,7 +165,7 @@ pub fn apply_macros(
                     let Some(value) = variables.get(name.as_ref()) else {
                         throw_error!((user)
                         	'try_loop, try_stack, "load", 
-                        	"variable {} does not currently exist",
+                        	"variable \"{}\" does not currently exist",
                        		range.clone();
                        		name
                        	);
@@ -238,7 +241,10 @@ pub fn apply_macros(
                     let Some(mac) = macros.get(other) else {
 						throw_error!((dne) 'try_loop, try_stack, other; range.clone());
                     };
-                    let replace = mac.apply(range.clone(), macro_range.arguments)?;
+                    let replace = match mac.apply(range.clone(), macro_range.arguments) {
+                    	Ok(value) => value,
+                    	Err(err) => {throw_error!('try_loop, try_stack, err.clone());}
+                    }; 
                     input.replace_range(range, &replace);
                 }
             }
@@ -251,3 +257,4 @@ pub fn apply_macros(
     }
     unreachable!()
 }
+

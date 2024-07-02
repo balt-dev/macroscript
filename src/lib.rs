@@ -4,6 +4,7 @@
 
 pub mod execution;
 pub(crate) mod parsing;
+pub mod test;
 pub mod stdlib;
 
 pub use execution::{Macro, MacroError};

@@ -17,5 +17,6 @@ pub fn main_test() -> Result<(), Box<dyn Error>> {
 	assert_eq!("3735928559 0", apply_macros(r"[int/DEADBEEF/16] [int/nan]".to_string(), &macros)?);
 	assert_eq!("𝄞ui", apply_macros(r"[slice/𝄞music///2]".to_string(), &macros)?);
 	assert_eq!("msc", apply_macros(r"[slice/𝄞music/1//2]".to_string(), &macros)?);
+	assert_eq!("iu𝄞", apply_macros(r"[slice/𝄞music//5/-2]".to_string(), &macros)?);
 	Ok(())
 }
