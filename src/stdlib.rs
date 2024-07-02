@@ -31,9 +31,9 @@ macro_rules! builtin_macros {
 	)*
 
 		/// Adds the standard library's builtin macros to a map of macro names.
-		pub fn add_stdlib(macros: &mut HashMap<String, &dyn Macro, impl BuildHasher>) {
+		pub fn add_stdlib(macros: &mut HashMap<String, Box<dyn Macro>, impl BuildHasher>) {
 		    $(
-		    	macros.insert($name.into(), &$id);
+		    	macros.insert($name.into(), Box::new($id));
 		    )*
 		}
 	}
@@ -355,7 +355,7 @@ builtin_macros! {
 	 					format!("failed to convert {value} to a number with base {base}")
 	 				)))
 		 	} else {
-  	 		  	let value = convert_to_number!("int", range; <i64> at 1 => value);
+  	 		  	let value = convert_to_number!("int", range; at 1 => value) as i64;
  		  		Ok(value.to_string())
  		  	}
 		}

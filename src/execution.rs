@@ -128,7 +128,7 @@ macro_rules! throw_error {
 /// Errors if any macro in the input errors.
 pub fn apply_macros(
     input: String,
-    macros: &HashMap<String, &dyn Macro, impl std::hash::BuildHasher>,
+    macros: &HashMap<String, Box<dyn Macro>, impl std::hash::BuildHasher>,
 ) -> Result<String, MacroError> {
     let input_len = input.len();
     let mut variables: HashMap<String, String> = HashMap::new();
