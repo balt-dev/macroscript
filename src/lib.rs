@@ -1,11 +1,11 @@
 #![warn(clippy::pedantic, clippy::perf, missing_docs)]
 
-//! Contains internal workings of the macro parser and runtime.
+#![doc = include_str!("../README.md")]
 
 pub mod execution;
 pub(crate) mod parsing;
 pub mod test;
 pub mod stdlib;
 
-pub use execution::{Macro, MacroError};
-pub use stdlib::add_stdlib;
+pub use execution::{Macro, MacroError, MacroErrorKind, apply_macros};
+pub use stdlib::add as add_stdlib;
