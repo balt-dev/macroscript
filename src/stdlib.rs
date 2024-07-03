@@ -159,6 +159,19 @@ fn truthy(string: impl AsRef<str>) -> bool {
 }
 
 builtin_macros! {
+	/// Comment. Returns nothing.
+	/// # Example
+	/// ```
+	/// # use macroscript::test::test_output; test_output(r#"
+	/// [/comment!] -> <no output>
+	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// ```
+	macro StdlibComment as "" {
+		fn apply(&self, _range: Range<usize>, _arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+			Ok(String::new())
+		}		
+	}
+
 	/// Addition. Takes 0 or more numeric arguments and returns their sum.
 	/// # Examples
 	/// ```
