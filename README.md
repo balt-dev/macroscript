@@ -6,7 +6,6 @@ This is a full reimplementation of [Robot Is Chill](https://github.com/balt-dev/
 A few things have been changed between RIC's implementation and this one.
 The most notable ones include:
 - No complex numbers
-- Arguments are unescaped by default
 - No runtime limits
 - More builtin macros
 - Numbers are limited to f64s
@@ -14,14 +13,16 @@ The most notable ones include:
   - In order to use text macros, they have to be added using [`TextMacro`].
 
 ## Example
-```
+```rust
 use macroscript::{apply_macros, add_stdlib};
 use std::collections::HashMap;
 
+# fn main() {
 let mut macros = HashMap::new();
 add_stdlib(&mut macros);
 
 let input = "[add/5/3]".to_string();
 let result = apply_macros(input, &macros).unwrap();
 assert_eq!(result, "8");
+# }
 ```

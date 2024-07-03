@@ -1,5 +1,6 @@
 #![warn(clippy::pedantic, clippy::perf, missing_docs)]
-
+#![allow(clippy::too_many_lines)]
+#![feature(byte_slice_trim_ascii, lazy_cell)]
 #![doc = include_str!("../README.md")]
 
 pub mod execution;

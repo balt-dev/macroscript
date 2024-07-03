@@ -10,23 +10,9 @@ pub struct MacroRange<'source> {
 	/// The range of the macro in the string.
 	pub range: Range<usize>,
 	/// The macro's name.
-	pub name: Cow<'source, str>,
+	pub name: &'source str,
 	/// The macro's arguments.
-	pub arguments: Vec<Cow<'source, str>>
-}
-
-impl<'source> MacroRange<'source> {
-	/// Transforms into an owned copy of the [`MacroRange`].
-	#[must_use]
-	pub fn into_owned(self) -> MacroRange<'static> {
-		MacroRange {
-			range: self.range,
-			name: Cow::Owned(self.name.into_owned()),
-			arguments: self.arguments.into_iter().map(
-				|arg| Cow::Owned(arg.into_owned())
-			).collect()
-		}
-	}
+	pub arguments: Vec<&'source str>
 }
 
 /// Tries to find the first macro pair in the string.
@@ -36,9 +22,9 @@ pub fn find_pair(source: &str) -> Option<MacroRange<'_>> {
 	let inside = &source[range.start + 1 .. range.end - 1];
 	let (name, arguments) = split_arguments(inside);
 	Some(MacroRange{
-		name: unescape(name),
+		name: name.into(),
 		range,
-		arguments: arguments.into_iter().map(|arg| unescape(arg)).collect()
+		arguments
 	})
 }
 
@@ -123,11 +109,11 @@ mod test {
 
 	#[test]
 	fn bracket_test() {
-		assert_eq!(find_innermost_brackets(r#"[a[b[c[d]c][e]b]a]"#), Some(6 .. 9));
-		assert_eq!(find_innermost_brackets(r#"\[[]\]"#), Some(2 .. 4));
-		assert_eq!(find_innermost_brackets(r#"[[\][]"#), Some(4 .. 6));
-		assert_eq!(find_innermost_brackets(r#"only open [[[ \]"#), None);
-		assert_eq!(find_innermost_brackets(r#"[ no close \]\]"#), None);
+		assert_eq!(find_innermost_brackets(r"[a[b[c[d]c][e]b]a]"), Some(6 .. 9));
+		assert_eq!(find_innermost_brackets(r"\[[]\]"), Some(2 .. 4));
+		assert_eq!(find_innermost_brackets(r"[[\][]"), Some(4 .. 6));
+		assert_eq!(find_innermost_brackets(r"only open [[[ \]"), None);
+		assert_eq!(find_innermost_brackets(r"[ no close \]\]"), None);
 	}	
 
 	#[test]

@@ -86,7 +86,7 @@ enum Substring {
 // Unfortunately, Rust's regex library doesn't support lookarounds.
 // I've reimplemented this without regex entirely.
 impl Macro for TextMacro {
-	fn apply(&self, _range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+	fn apply(&self, _range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 		let amount = LazyCell::new(|| arguments.len().to_string());
 		let joined = LazyCell::new(|| arguments.join("/"));
 		let mut target = self.pattern.clone();

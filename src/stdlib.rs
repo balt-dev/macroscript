@@ -14,10 +14,10 @@ This is reminiscent of Lua's `pcall` function.
 
 ### Examples
 ```
-# use macroscript::test::test_output; test_output(r#"
+# use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 [try/\[add\/5\/5\]] -> true/10
 [try/\[shl\/5\/100\]] -> false/shift amount of 100 is too large
-# "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+# "#)}
 ```
 
 ## `load`
@@ -25,10 +25,10 @@ Loads a variable's value and returns it. Errors if the variable doesn't exist.
 
 ### Examples
 ```
-# use macroscript::test::test_output; test_output(r#"
+# use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 [load/x] -> error: variable "x" does not currently exist
 [store/x/5][load/x] -> 5
-# "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+# "#)}
 ```
 
 ## `store`
@@ -38,9 +38,9 @@ The variable table is global to the `apply_macros` function.
 
 ### Example
 ```
-# use macroscript::test::test_output; test_output(r#"
+# use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 [store/x/5] -> <no output>
-# "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+# "#)}
 ```
 
 ## `drop`
@@ -48,9 +48,9 @@ Deletes a variable.
 
 ### Example
 ```
-# use macroscript::test::test_output; test_output(r#"
+# use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 [store/x/5][drop/x][load/x] -> error: variable "x" does not currently exist
-# "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+# "#)}
 ```
 
 ## `get`
@@ -58,9 +58,9 @@ Gets the value of a variable, storing a supplied default and returning it if the
 
 ### Example
 ```
-# use macroscript::test::test_output; test_output(r#"
+# use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 [get/x/5],[load/x] -> 5,5
-# "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+# "#)}
 ```
 
 ## `is_stored`
@@ -68,23 +68,23 @@ Returns whether a variable currently exists.
 
 ### Examples
 ```
-# use macroscript::test::test_output; test_output(r#"
+# use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 [is_stored/x] -> false
 [store/x/5][is_stored/x] -> true
-# "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+# "#)}
 */
 
 use crate::execution::{Macro, MacroError, MacroErrorKind};
 use itertools::Itertools;
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::str::FromStr;
 use std::hash::{Hasher, BuildHasher};
 use rand_pcg::Pcg32;
-use rand::{self, Rng, SeedableRng};
+use rand::{Rng, SeedableRng};
 use seahash::SeaHasher;
 use regex::Regex;
+use crate::parsing::unescape;
 
 macro_rules! count {
 	($tt: tt $($tts: tt)*) => {
@@ -158,35 +158,37 @@ fn truthy(string: impl AsRef<str>) -> bool {
 	}
 }
 
+fn escape(s: impl Into<String>) -> String {
+	s.into().replace("\\", r"\\").replace("/", r"\/").replace("[", r"\/").replace("]", r"\/")
+}
+
 builtin_macros! {
 	/// Comment. Returns nothing.
 	/// # Example
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [/comment!] -> <no output>
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Comment as "" {
-		fn apply(&self, _range: Range<usize>, _arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, _range: Range<usize>, _arguments: Vec<&str>) -> Result<String, MacroError> {
 			Ok(String::new())
 		}		
 	}
 
-	/// Reverses and escapes the given inputs.
-	/// Note that brackets aren't (and can't be) escaped.
+	/// Reverses the given inputs.
 	/// # Example
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [reverse/one/tw\/o/thr\\ee] -> thr\\ee/tw\/o/one
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Reverse as "reverse" {
-		fn apply(&self, _range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, _range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 			Ok(
 				arguments
 				.into_iter()
 				.rev()
-				.map(|v| v.replace("\\", r"\\").replace("/", r"\/"))
 				.join("/")
 			)
 		}
@@ -195,15 +197,15 @@ builtin_macros! {
 	/// Addition. Takes 0 or more numeric arguments and returns their sum.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	///	[add/3/2/3/5/3] -> 16
 	/// [add/5] -> 5
 	/// [add] -> 0
 	/// [add/a/b] -> error: could not convert argument 1 "a" to f64
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Add as "add" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 		    arguments
 	            .iter()
 	            .enumerate()
@@ -218,14 +220,14 @@ builtin_macros! {
 	/// Multiplicaton. Takes 0 or more numeric arguments and returns their product.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	///	[multiply/1/2/3/4/5] -> 120
 	/// [multiply/5] -> 5
 	/// [multiply] -> 1
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Multiply as "multiply" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 		    arguments
 	            .iter()
 	            .enumerate()
@@ -238,19 +240,17 @@ builtin_macros! {
 	}
 
 	/// Unescapes its input.
-	/// Since arguments are automatically unescaped, 
-	/// this is implemented as the identity function.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [unescape/among\/us] -> among/us
 	/// [unescape/[if/true/\[add\/1\/1\]/\[add\/2\/1\]]] -> 2
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Unescape as "unescape" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (first_arg, ) = get_args!("unescape", range, arguments; first_arg);
-        	Ok(first_arg.to_string())
+        	Ok(crate::parsing::unescape(first_arg).to_string())
 		}
 	}
 
@@ -258,16 +258,16 @@ builtin_macros! {
 	///  with the last as a base case.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [if/true/a/true/b/c] -> a
 	/// [if/false/a/true/b/c] -> b
 	/// [if/false/a/false/b/c] -> c
 	/// [if/false/a/false/b] -> error: all conditions exhausted
 	/// [if/c] -> c
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro If as "if" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 			let mut chunks = arguments.chunks_exact(2);
 			// Technically refutable pattern
 			while let Some([condition, value]) = chunks.next() {
@@ -293,16 +293,16 @@ builtin_macros! {
 	/// Truthy strings have to be either "True", "true", or a number greater than 0.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [truthy/1] -> true
 	/// [truthy/0] -> false
 	/// [truthy/ture] -> false
 	/// [truthy/among us] -> false
 	/// [truthy/True] -> true
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Truthy as "truthy" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (first_arg, ) = get_args!("truthy", range, arguments; first_arg);
  		  	Ok(truthy(first_arg).to_string())
 	  	}		
@@ -311,13 +311,13 @@ builtin_macros! {
 	/// Returns whether a string can be converted to a number.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [is_number/1] -> true
 	/// [is_number/abc] -> false
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro IsNumber as "is_number" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (first_arg, ) = get_args!("is_number", range, arguments; first_arg);
  		  	Ok(f64::from_str(first_arg).is_ok().to_string())
 		}
@@ -326,12 +326,12 @@ builtin_macros! {
 	/// Raises a number to the power of another.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [pow/7/2] -> 49
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ``` 
 	macro Pow as "pow" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (base, exp) = get_args!("pow", range, arguments; base, exp);
  		  	let base = convert_to_number!("pow", range; at 1 => base);
  		  	let exp = convert_to_number!("pow", range; at 2 => exp);
@@ -342,13 +342,13 @@ builtin_macros! {
 	/// Subtracts a number from another.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [subtract/7/2] -> 5
 	/// [subtract/3/5] -> -2
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ``` 
 	macro Sub as "subtract" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (lhs, rhs) = get_args!("subtract", range, arguments; a, b);
  		  	let lhs = convert_to_number!("subtract", range; at 1 => lhs);
  		  	let rhs = convert_to_number!("subtract", range; at 2 => rhs);
@@ -359,16 +359,16 @@ builtin_macros! {
 	/// Divides a number by another.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [divide/5/2] -> 2.5 
 	/// [divide/3/5] -> 0.6
 	/// [divide/1/0] -> inf
 	/// [divide/-1/0] -> -inf
 	/// [divide/0/0] -> NaN
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ``` 
 	macro Div as "divide" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (lhs, rhs) = get_args!("divide", range, arguments; a, b);
  		  	let lhs = convert_to_number!("divide", range; at 1 => lhs);
  		  	let rhs = convert_to_number!("divide", range; at 2 => rhs);
@@ -379,17 +379,17 @@ builtin_macros! {
 	/// Takes the modulus of one number with respect to another.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [mod/5/2] -> 1
 	/// [mod/-3/5] -> 2
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ``` 
 	macro Modulus as "mod" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (lhs, rhs) = get_args!("mod", range, arguments; a, b);
  		  	let lhs = convert_to_number!("mod", range; at 1 => lhs);
  		  	let rhs = convert_to_number!("mod", range; at 2 => rhs);
-			Ok((lhs.rem_euclid(rhs)).to_string())
+			Ok(lhs.rem_euclid(rhs).to_string())
 		}
 	}
 
@@ -397,13 +397,13 @@ builtin_macros! {
 	/// Takes the logarithm of a number. The base is optional, and defaults to [`std::f64::consts::E`].
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [log/5] -> 1.6094379124341003
 	/// [log/16/2] -> 4
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ``` 
 	macro Log as "log" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (value, ) = get_args!("log", range, arguments; value);
  		  	let value = convert_to_number!("log", range; at 1 => value);
  		  	let base = if let Some(base) = arguments.get(1) {
@@ -422,12 +422,12 @@ builtin_macros! {
 	/// # /*
 	/// [rand] -> ?
 	/// # */
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [rand/among us] -> 0.22694492387911513
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ``` 
 	macro Rand as "rand" {
-		fn apply(&self, _range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, _range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let value: f64 = if let Some(seed) = arguments.first() {
  		  		let mut hasher = SeaHasher::new();
  		  		hasher.write(seed.as_bytes());
@@ -443,12 +443,12 @@ builtin_macros! {
 	/// Hashes a value, returning a 64-bit integer.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [hash/rain world] -> 13463560454117874234
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Hash as "hash" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (value, ) = get_args!("hash", range, arguments; a);
  		  	let mut hasher = SeaHasher::new();
  		  	hasher.write(value.as_bytes());
@@ -457,17 +457,20 @@ builtin_macros! {
 	}
 
 	/// Replaces all matches of a regular expression with a pattern.
+	/// Both the pattern and replacement are unescaped.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [replace/vaporeon/(\[aeiou\])/$1$1] -> vaapooreeoon
 	/// [replace/porygon/\[o/e] -> error: unclosed character class
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Replace as "replace" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (haystack, pattern, replacement) = get_args!("hash", range, arguments; a, b, c);
- 		  	let regex = Regex::new(pattern).map_err(|err| {
+			let pattern = crate::parsing::unescape(&**pattern);
+			let replacement = crate::parsing::unescape(replacement);
+ 		  	let regex = Regex::new(&pattern).map_err(|err| {
 				let disp = match err {
 					regex::Error::Syntax(err) => {
 						let err_string = err.to_string();
@@ -488,13 +491,13 @@ builtin_macros! {
 	/// Converts the input to an integer, with an optional base to convert from.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [int/54.2] -> 54
 	/// [int/-101/2] -> -5
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Int as "int" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (value, ) = get_args!("int", range, arguments; value);
  		  	if let Some(base) = arguments.get(1) {
 				let base = convert_to_number!("int", range; <u32> at 2 => base);
@@ -518,12 +521,12 @@ builtin_macros! {
 	/// Converts the input to a hexadecimal integer.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [hex/16] -> 10
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Hex as "hex" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (value, ) = get_args!("hex", range, arguments; value);
 			let value = convert_to_number!("hex", range; <i64> at 1 => value);
 			Ok(format!("{value:x}"))
@@ -534,12 +537,12 @@ builtin_macros! {
 	/// Converts the input to a binary integer.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [bin/5] -> 101
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Bin as "bin" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (value, ) = get_args!("bin", range, arguments; value);
 			let value = convert_to_number!("bin", range; <i64> at 1 => value);
 			Ok(format!("{value:b}"))
@@ -550,12 +553,12 @@ builtin_macros! {
 	/// Converts the input to an octal integer.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [oct/59] -> 73
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Oct as "oct" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (value, ) = get_args!("bin", range, arguments; value);
 			let value = convert_to_number!("bin", range; <i64> at 1 => value);
 			Ok(format!("{value:o}"))
@@ -566,13 +569,13 @@ builtin_macros! {
 	/// Note that this will error for invalid codepoints!
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [ord/55296] -> error: invalid codepoint
 	/// [ord/65] -> A
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Ord as "ord" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (value, ) = get_args!("ord", range, arguments; value);
 			let value = convert_to_number!("ord", range; <u32> at 1 => value);
 			char::from_u32(value)
@@ -587,14 +590,14 @@ builtin_macros! {
 	/// All extraneous characters are discarded.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [chr/] -> error: no input
 	/// [chr/A] -> 65
 	/// [chr/Among Us] -> 65
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Chr as "chr" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (value, ) = get_args!("chr", range, arguments; value);
  		  	value.chars().next()
  		  		.map(|c| (c as u32).to_string())
@@ -607,14 +610,14 @@ builtin_macros! {
 	/// Gets the length of the first input.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [len/] -> 0
 	/// [len/abc] -> 3
 	/// [len/abc/def] -> 3
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Length as "len" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (value, ) = get_args!("len", range, arguments; value);
  		  	Ok(value.chars().count().to_string())
 		}
@@ -624,12 +627,12 @@ builtin_macros! {
 	/// then returns the section at the third argument.
 	/// # Example
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [split/a,b,c/,/1] -> b
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Split as "split" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (haystack, delimiter, index) = get_args!("split", range, arguments; a, b, c);
 			let index = convert_to_number!("split", range; <usize> at 1 => index);
  		  	haystack.split(&**delimiter).nth(index)
@@ -646,18 +649,18 @@ builtin_macros! {
 	/// If the index is `#`, returns the number of arguments, minus 1 for the `#`.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [select/1/a/b/c] -> a
 	/// [select/#/one/two/three] -> 3
 	/// [select/0/it works, but why would you do this?] -> 0
 	/// [select/5/a/b] -> error: index 5 is out of bounds
 	/// [select/-1/nope, this isn't python] -> error: could not convert argument 1 "-1" to usize
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Select as "select" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (index, ) = get_args!("select", range, arguments; a);
- 		  	if index == "#" {
+ 		  	if *index == "#" {
  		  		return Ok((arguments.len() - 1).to_string());
  		  	}
 			let index = convert_to_number!("select", range; <usize> at 1 => index);
@@ -674,15 +677,15 @@ builtin_macros! {
 	/// Returns whether two strings are equal.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [equal/one/one] -> true
 	/// [equal/one/two] -> false
 	/// [equal/1/1] -> true
 	/// [equal/1/1.0] -> false
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Equal as "equal" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (lhs, rhs) = get_args!("equal", range, arguments; a, b);
 			Ok((**lhs == **rhs).to_string()) // ** to convert &Cow<str> to str
 		}
@@ -691,14 +694,14 @@ builtin_macros! {
 	/// Returns whether a number is equal to another.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [#equal/1/1.0] -> true
 	/// [#equal/0.3/[add/0.1/0.2]] -> false
 	/// [#equal/nan/nan] -> false
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro NumEqual as "#equal" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (lhs, rhs) = get_args!("#equal", range, arguments; a, b);
 			let lhs = convert_to_number!("#equal", range; at 1 => lhs);
 			let rhs = convert_to_number!("#equal", range; at 2 => rhs);
@@ -709,14 +712,14 @@ builtin_macros! {
 	/// Returns whether a number is greater than another.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [greater/1/1] -> false
 	/// [greater/0.2/0.1] -> true
 	/// [greater/nan/nan] -> false
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Greater as "greater" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (lhs, rhs) = get_args!("greater", range, arguments; a, b);
 			let lhs = convert_to_number!("greater", range; at 1 => lhs);
 			let rhs = convert_to_number!("greater", range; at 2 => rhs);
@@ -727,14 +730,14 @@ builtin_macros! {
 	/// Returns whether a number is less than another.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [less/1/1] -> false
 	/// [less/0.1/0.2] -> true
 	/// [less/nan/nan] -> false
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Less as "less" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (lhs, rhs) = get_args!("less", range, arguments; a, b);
 			let lhs = convert_to_number!("less", range; at 1 => lhs);
 			let rhs = convert_to_number!("less", range; at 2 => rhs);
@@ -745,13 +748,13 @@ builtin_macros! {
 	/// Negates many boolean inputs.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [not/1.0] -> false
 	/// [not/true/false/3.0/-5.9] -> false/true/false/true
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Not as "not" {
-		fn apply(&self, _range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, _range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 			Ok(
 				arguments.iter()
 					.map(truthy)
@@ -765,13 +768,13 @@ builtin_macros! {
 	/// Takes the logical AND of an arbitrary number of boolean inputs.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [and/true/true] -> true
 	/// [and/false/true/true] -> false
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro And as "and" {
-		fn apply(&self, _range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, _range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 			Ok(
 				arguments.iter()
 					.map(truthy)
@@ -785,13 +788,13 @@ builtin_macros! {
 	/// Takes the logical OR of an arbitrary number of boolean inputs.
 	/// # Example
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [or/false/true] -> true
 	/// [or/false/true/true] -> true
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Or as "or" {
-		fn apply(&self, _range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, _range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 			Ok(
 				arguments.iter()
 					.map(truthy)
@@ -806,13 +809,13 @@ builtin_macros! {
 	/// Takes the logical XOR of an arbitrary number of boolean inputs.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [xor/false/true] -> true
 	/// [xor/false/true/true] -> false
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Xor as "xor" {
-		fn apply(&self, _range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, _range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 			Ok(
 				arguments.iter()
 					.map(truthy)
@@ -826,12 +829,12 @@ builtin_macros! {
 	/// Takes the bitwise NOT of a 64-bit signed integer input.
 	/// # Example
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [#not/0] -> -1 (0b00...0 -> 0b11...1)
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro BitNot as "#not" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 			let (lhs, ) = get_args!("#not", range, arguments; a);
 			let lhs = convert_to_number!("#not", range; <i64> at 1 => lhs);
 			Ok((!lhs).to_string())
@@ -841,13 +844,13 @@ builtin_macros! {
 	/// Takes the bitwise AND of two 64-bit signed integer inputs.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [#and/11/5] -> 1 (0b1011 & 0b0101)
 	/// [#and/8/7] -> 0 (0b1000 & 0b0111)
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro BitAnd as "#and" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 			let (lhs, rhs) = get_args!("#and", range, arguments; a, b);
 			let lhs = convert_to_number!("#and", range; <i64> at 1 => lhs);
 			let rhs = convert_to_number!("#and", range; <i64> at 2 => rhs);
@@ -858,13 +861,13 @@ builtin_macros! {
 	/// Takes the bitwise OR of two 64-bit signed integer inputs.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [#or/5/3] -> 7 (0b0101 | 0b0011)
 	/// [#or/8/7] -> 15 (0b1000 | 0b0111)
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro BitOr as "#or" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 			let (lhs, rhs) = get_args!("#or", range, arguments; a, b);
 			let lhs = convert_to_number!("#or", range; <i64> at 1 => lhs);
 			let rhs = convert_to_number!("#or", range; <i64> at 2 => rhs);
@@ -876,13 +879,13 @@ builtin_macros! {
 	/// Takes the bitwise XOR of two 64-bit signed integer inputs.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [#xor/5/3] -> 6 (0b0101 ^ 0b0011)
 	/// [#xor/8/11] -> 3 (0b1000 ^ 0b1011)
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro BitXor as "#xor" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 			let (lhs, rhs) = get_args!("#xor", range, arguments; a, b);
 			let lhs = convert_to_number!("#xor", range; <i64> at 1 => lhs);
 			let rhs = convert_to_number!("#xor", range; <i64> at 2 => rhs);
@@ -894,13 +897,13 @@ builtin_macros! {
 	/// The second argument may not be greater than 63.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [shl/5/2] -> 20 (0b101 -> 0b10100)
 	/// [shl/-9223372036854775808/1] -> 0 (0b100...0 -> 0b00...0)
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro ShiftLeft as "shl" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 			let (lhs, rhs) = get_args!("shl", range, arguments; a, b);
 			let lhs = convert_to_number!("shl", range; <i64> at 1 => lhs) as u64;
 			let rhs = convert_to_number!("shl", range; <u32> at 2 => rhs);
@@ -918,12 +921,12 @@ builtin_macros! {
 	/// The second argument may not be greater than 63.
 	/// # Example
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [shr/-9223372036854775808/1] -> 4611686018427387904 (0b100...0 -> 0b0100...0)
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro ShiftRight as "shr" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 			let (lhs, rhs) = get_args!("shr", range, arguments; a, b);
 			let lhs = convert_to_number!("shr", range; <i64> at 1 => lhs) as u64;
 			let rhs = convert_to_number!("shr", range; <u32> at 2 => rhs);
@@ -941,12 +944,12 @@ builtin_macros! {
 	/// The second argument may not be greater than 63.
 	/// # Example
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [#shr/-9223372036854775808/1] -> -4611686018427387904 (0b100...0 -> 0b1100...0)
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro ArithmeticShiftRight as "#shr" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 			let (lhs, rhs) = get_args!("#shr", range, arguments; a, b);
 			let lhs = convert_to_number!("#shr", range; <i64> at 1 => lhs);
 			let rhs = convert_to_number!("#shr", range; <u32> at 2 => rhs);
@@ -962,13 +965,13 @@ builtin_macros! {
 	/// Gets the absolute value of a number.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [abs/-5] -> 5
 	/// [abs/NaN] -> NaN
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Abs as "abs" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (value, ) = get_args!("abs", range, arguments; value);
  		  	let value = convert_to_number!("abs", range; at 1 => value);
 			Ok(value.abs().to_string())
@@ -978,12 +981,12 @@ builtin_macros! {
 	/// Gets the sine of a number.
 	/// # Example
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [int/[sin/3.14159]] -> 0
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Sine as "sin" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (value, ) = get_args!("sin", range, arguments; value);
  		  	let value = convert_to_number!("sin", range; at 1 => value);
 			Ok(value.sin().to_string())
@@ -993,12 +996,12 @@ builtin_macros! {
 	/// Gets the cosine of a number.
 	/// # Example
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [int/[add/-0.01/[cos/3.14159]]] -> -1
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Cosine as "cos" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (value, ) = get_args!("cos", range, arguments; value);
  		  	let value = convert_to_number!("cos", range; at 1 => value);
 			Ok(value.cos().to_string())
@@ -1008,12 +1011,12 @@ builtin_macros! {
 	/// Gets the tangent of a number.
 	/// # Example
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [int/[multiply/2/[tan/1]]] -> 3
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Tangent as "tan" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (value, ) = get_args!("tan", range, arguments; value);
  		  	let value = convert_to_number!("tan", range; at 1 => value);
 			Ok(value.tan().to_string())
@@ -1024,12 +1027,12 @@ builtin_macros! {
 	/// Gets the inverse sine of a number.
 	/// # Example
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [asin/0] -> 0
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro InvSine as "asin" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (value, ) = get_args!("asin", range, arguments; value);
  		  	let value = convert_to_number!("asin", range; at 1 => value);
 			Ok(value.asin().to_string())
@@ -1039,12 +1042,12 @@ builtin_macros! {
 	/// Gets the inverse cosine of a number.
 	/// # Example
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [acos/1] -> 0
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro InvCosine as "acos" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (value, ) = get_args!("acos", range, arguments; value);
  		  	let value = convert_to_number!("acos", range; at 1 => value);
 			Ok(value.acos().to_string())
@@ -1054,27 +1057,27 @@ builtin_macros! {
 	/// Gets the inverse tangent of a number.
 	/// # Example
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [int/[atan/1.5708]] -> 1
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro InvTangent as "atan" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (value, ) = get_args!("atan", range, arguments; value);
  		  	let value = convert_to_number!("atan", range; at 1 => value);
 			Ok(value.atan().to_string())
 		}
 	}
 
-	/// Immediately raises an error.
+	/// Immediately raises an error. The error message is unescaped.
 	/// # Example
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [error/oh no!] -> error: oh no!
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Error as "error" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 			Err(MacroError::new("error".into(), range, MacroErrorKind::user(
 				arguments.first().map_or(String::from("no reason given"), |v| v.to_string())
 			)))
@@ -1084,13 +1087,13 @@ builtin_macros! {
 	/// Raises an error if the first argument is not truthy.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [assert/1/all good] -> <no output>
 	/// [assert/false/yikes] -> error: yikes
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Assert as "assert" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (condition, ) = get_args!("assert", range, arguments; a);
 			if truthy(condition) {
 				Ok(String::new())
@@ -1107,15 +1110,15 @@ builtin_macros! {
 	/// This works similarly to Python's string slicing rules (and is in fact carried over from it).
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [slice/abcdefg/1/4] -> bcd
 	/// [slice/abcde/1/] -> bcde
 	/// [slice/1,2,30,45///2] -> 123,5
 	/// [slice/kcab///-1] -> back
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Slice as "slice" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (haystack, start, end) = get_args!("slice", range, arguments; a, b, c);
 			let start = (!start.is_empty())
 				.then(|| Ok(convert_to_number!("slice", range; <usize> at 2 => start)))
@@ -1169,13 +1172,13 @@ builtin_macros! {
 	/// Returns -1 if it couldn't be found.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [find/homeowner/meow] -> 2
 	/// [find/clubstep monster/end] -> -1
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
  	macro Find as "find" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 		  	let (haystack, needle) = get_args!("find", range, arguments; a, b);
 			
 			Ok(haystack.find(&**needle).map_or(-1, |v| {
@@ -1188,57 +1191,58 @@ builtin_macros! {
 	/// Returns 0 if none were found.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [count/Pacific Ocean/c] -> 3
 	/// [count/hellololo/lol] -> 1
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Count as "count" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 		  	let (haystack, needle) = get_args!("count", range, arguments; a, b);
 			Ok(haystack.matches(&**needle).count().to_string())
 		}
 	}
 
-	/// Joins all arguments with the first argument.
+	/// Joins all arguments with the unescaped first argument.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [join/:/red/left/sleep] -> red:left:sleep
 	/// [join/\/\//dou/ble] -> dou//ble
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Join as "join" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 		  	let (delimiter, ) = get_args!("join", range, arguments; a);
-		  	Ok(arguments.iter().skip(1).join(delimiter))
+		  	Ok(arguments.iter().skip(1).join(&unescape(delimiter)))
 		}		
 	}
 
-	/// Escapes the first argument twice.
+	/// Escapes the first argument.
+	/// 
 	/// # Example
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
-	/// [escape/\[add\/5\/3\]] -> \\\[add\\\/5\\\/3\\\]
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
+	/// [escape/add/5/3] -> add\/5\/3
+	/// # "#)}
 	/// ```
 	macro Escape as "escape" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
-		  	let (raw, ) = get_args!("escape", range, arguments; a);
-		  	Ok(raw.replace('/', r"\\\/").replace('[', r"\\\[").replace(']', r"\\\]"))
+		fn apply(&self, _range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
+		  	let raw = arguments.join("/");
+		  	Ok(raw.replace('\\', r"\\").replace('/', r"\/").replace('[', r"\[").replace(']', r"\]"))
 		}
 	}
 
 	/// Repeats the first argument N times, where N is the second argument, optionally joined by the third argument.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [repeat/5/5/:] -> 5:5:5:5:5
-	/// [store/x/0][repeat/\[store\/x\/\[add\/\[load\/x\]\/1\]\]\[load\/x\]/5] -> 12345
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// [store/x/0][unescape/[repeat/\[store\/x\/\[add\/\[load\/x\]\/1\]\]\[load\/x\]/5]] -> 12345
+	/// # "#)}
 	/// ```
 	macro Repeat as "repeat" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 		  	let (target, count) = get_args!("repeat", range, arguments; a, b);
 			let count = convert_to_number!("repeat", range; <usize> at 2 => count);
 			Ok(std::iter::repeat(target).take(count).join(arguments.get(2).map_or("", |v| &**v)))
@@ -1248,13 +1252,13 @@ builtin_macros! {
 	/// Turns the input into lowercase.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [lower/VVVVVV] -> vvvvvv
 	/// [lower/ὈΔΥΣΣΕΎΣ] -> ὀδυσσεύς
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Lower as "lower" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 		  	let (target, ) = get_args!("lower", range, arguments; a);
 			Ok(target.to_lowercase())
 		}
@@ -1263,13 +1267,13 @@ builtin_macros! {
 	/// Turns the input into uppercase.
 	/// # Examples
 	/// ```
-	/// # use macroscript::test::test_output; test_output(r#"
+	/// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
 	/// [upper/vvvvvv] -> VVVVVV
 	/// [upper/tschüß] -> TSCHÜSS
-	/// # "#)?; Ok::<(), Box<dyn std::error::Error>>(())
+	/// # "#)}
 	/// ```
 	macro Upper as "upper" {
-		fn apply(&self, range: Range<usize>, arguments: Vec<Cow<'_, str>>) -> Result<String, MacroError> {
+		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 		  	let (target, ) = get_args!("upper", range, arguments; a);
 			Ok(target.to_uppercase())
 		}

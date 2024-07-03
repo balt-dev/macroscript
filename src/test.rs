@@ -3,7 +3,6 @@
 // Instead, this is a hidden export.
 #![doc(hidden)]
 #![allow(missing_docs)]
-
 use std::collections::HashMap;
 use std::error::Error;
 

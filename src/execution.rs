@@ -1,6 +1,5 @@
 //! Contains items pertaining to execution of macros on a given string.
 use crate::parsing;
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ops::Range;
 
@@ -80,7 +79,7 @@ pub trait Macro {
     fn apply(
         &self,
         range: Range<usize>,
-        arguments: Vec<Cow<'_, str>>,
+        arguments: Vec<&str>,
     ) -> Result<String, MacroError>;
 }
 
@@ -138,7 +137,7 @@ pub fn apply_macros(
     let mut try_stack = vec![(input, 0..input_len)];
     'try_loop: while let Some((mut input, range)) = try_stack.pop() { // pop isn't optimal here, but would take a huge refactor
         while let Some(macro_range) = parsing::find_pair(&input) {
-            match &*macro_range.name {
+            match macro_range.name {
                 "try" => {
                     let mac_range = macro_range.range;
                     let Some(new_input) = macro_range.arguments.first() else {
@@ -162,7 +161,7 @@ pub fn apply_macros(
                        	);
                     };
                     let range = macro_range.range;
-                    let Some(value) = variables.get(name.as_ref()) else {
+                    let Some(value) = variables.get(*name) else {
                         throw_error!((user)
                         	'try_loop, try_stack, "load", 
                         	"variable \"{}\" does not currently exist",
@@ -181,7 +180,7 @@ pub fn apply_macros(
                       	);
                     };
                     let range = macro_range.range;
-                    variables.remove(name.as_ref());
+                    variables.remove(*name);
                     input.replace_range(range, "");
                 }
                 "store" => {
@@ -200,7 +199,7 @@ pub fn apply_macros(
                       	);
                     };
                     let range = macro_range.range;
-                    variables.insert(name.clone().into_owned(), value.clone().into_owned());
+                    variables.insert((*name).to_string(), (*value).to_string());
                     input.replace_range(range, "");
                 }
                 "get" => {
@@ -220,8 +219,8 @@ pub fn apply_macros(
                     };
                     let range = macro_range.range;
                     let result = variables
-                        .entry(name.clone().into_owned())
-                        .or_insert(value.clone().into_owned());
+                        .entry((*name).to_string())
+                        .or_insert((*value).to_string());
                     input.replace_range(range, result);
                 }
                 "is_stored" => {
@@ -233,7 +232,7 @@ pub fn apply_macros(
                       	);
                    	};
                     let range = macro_range.range;
-                    let exists = variables.contains_key(name.as_ref());
+                    let exists = variables.contains_key(*name);
                     input.replace_range(range, &exists.to_string());
                 }
                 other => {
