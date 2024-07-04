@@ -1,6 +1,6 @@
 [package]
 name = "macroscript"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -11,3 +11,9 @@ rand_pcg = "0.3"
 rand = "0.8"
 seahash = "4"
 regex = "1"
+
+getrandom = {version = "0.2", optional = true}
+
+
+[features]
+js = ["dep:getrandom", "getrandom/js"]

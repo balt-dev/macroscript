@@ -25,19 +25,22 @@ The strings are replaced from back to front, and if another one is constructed w
 
 ## Example
 ```
-#    use macroscript::{Macro, apply_macros, TextMacro};
+#    use macroscript::{Macro, apply_macros, TextMacro, add_stdlib};
 #    use std::collections::HashMap;
 #    
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-let macros = HashMap::<String, Box<dyn Macro>>::from([
+let mut macros = HashMap::<String, Box<dyn Macro>>::from([
     ("bad_select".to_string(), TextMacro::boxed("$$1")),
-    ("escaped_dollar".to_string(), TextMacro::boxed(r"\$1"))
+    ("escaped_dollar".to_string(), TextMacro::boxed(r"\$1")),
+	("square".to_string(), TextMacro::boxed("[multiply/$1/$1]"))
 ]);
+add_stdlib(&mut macros);
 assert_eq!("$1", apply_macros("[escaped_dollar/2]".into(), &macros)?);
 assert_eq!("α", apply_macros("[bad_select/2/α]".into(), &macros)?);
 assert_eq!("$3", apply_macros("[bad_select/3]".into(), &macros)?);
 assert_eq!("0/1/2/3", apply_macros("[bad_select/0/1/2/3]".into(), &macros)?);
 assert_eq!("4", apply_macros("[bad_select/#/β/2/3]".into(), &macros)?);
+assert_eq!("16", apply_macros("[square/4]".into(), &macros)?);
 #        Ok(()) }
 ```
 
@@ -118,7 +121,7 @@ impl Macro for TextMacro {
 				};
 				subs.push((idx .. idx + end, sub));
 			}
-			for (range, substring) in subs.drain(..).rev() {
+			for (range, substring) in subs.drain(..) {
 				let repl: Cow<'_, str> = match substring {
 					Substring::Count => Cow::Borrowed(&*amount),
 					Substring::Index(0) => Cow::Borrowed(&*joined),
