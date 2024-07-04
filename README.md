@@ -7,7 +7,7 @@ A few things have been changed between RIC's implementation and this one.
 The most notable ones include:
 - No complex numbers
 - No runtime limits
-- More builtin macros
+- More builtin macros (check the docs!)
 - Numbers are limited to f64s
 - Text macros (e.g. `double: [multiply/$1/2]`) aren't included by default
   - In order to use text macros, they have to be added using [`TextMacro`].
