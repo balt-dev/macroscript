@@ -5,10 +5,9 @@ This is a full reimplementation of [Robot Is Chill](https://github.com/balt-dev/
 ## Changes
 A few things have been changed between RIC's implementation and this one.
 The most notable ones include:
-- No complex numbers
+- Numbers are limited to f64s (no complex numbers)
 - No runtime limits
 - More builtin macros (check the docs!)
-- Numbers are limited to f64s
 - Text macros (e.g. `double: [multiply/$1/2]`) aren't included by default
   - In order to use text macros, they have to be added using [`TextMacro`].
 
