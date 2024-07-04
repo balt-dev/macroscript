@@ -1,8 +1,10 @@
 //! Handles parsing of a macro step.
 
-use std::collections::VecDeque;
-use std::ops::Range;
-use std::borrow::Cow;
+use std::{
+	collections::VecDeque,
+	ops::Range,
+	borrow::Cow
+};
 
 /// An object containing data about a macro match.
 #[derive(PartialEq, Eq, Debug, Clone, Hash, Default)]
@@ -21,14 +23,11 @@ pub fn find_pair(source: &str) -> Option<MacroRange<'_>> {
 	let range = find_innermost_brackets(source)?;
 	let inside = &source[range.start + 1 .. range.end - 1];
 	let (name, arguments) = split_arguments(inside);
-	Some(MacroRange{
-		name: name.into(),
-		range,
-		arguments
-	})
+	Some(MacroRange { range, name, arguments })
 }
 
 /// Finds the first occurrence of an unescaped pair of square brackets.
+#[allow(clippy::range_plus_one)]
 fn find_innermost_brackets(string: &str) -> Option<Range<usize>> {
 	// Find first [
 	let mut last_escaped = false;
@@ -114,12 +113,5 @@ mod test {
 		assert_eq!(find_innermost_brackets(r"[[\][]"), Some(4 .. 6));
 		assert_eq!(find_innermost_brackets(r"only open [[[ \]"), None);
 		assert_eq!(find_innermost_brackets(r"[ no close \]\]"), None);
-	}	
-
-	#[test]
-	fn macro_test() {
-	let s = r"among [add/60/[multiply\/3/3]] us";
-		let p = find_pair(s).unwrap();
-		println!("{:?}", &s[p.range])
 	}
 }

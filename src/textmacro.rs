@@ -4,11 +4,13 @@ Handles everything relating to text-based macros.
 If you want help writing a text macro, see the documentation of [`TextMacro`].
 */
 
-use std::ops::Range;
-use std::borrow::Cow;
+use std::{
+	ops::Range,
+	borrow::Cow,
+	cell::LazyCell,
+	str::FromStr
+};
 use crate::{Macro, MacroError};
-use std::cell::LazyCell;
-use std::str::FromStr;
 
 /**
 Simplifies creating macros by allowing you to compose them from other macros.

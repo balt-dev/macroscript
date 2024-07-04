@@ -74,17 +74,29 @@ Returns whether a variable currently exists.
 # "#)}
 */
 
-use crate::execution::{Macro, MacroError, MacroErrorKind};
+#![allow(
+	clippy::cast_sign_loss,
+	clippy::float_cmp,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap
+)]
+
 use itertools::Itertools;
-use std::collections::HashMap;
-use std::ops::Range;
-use std::str::FromStr;
-use std::hash::{Hasher, BuildHasher};
+use std::{
+	collections::HashMap,
+	ops::Range,
+	str::FromStr,
+	hash::{Hasher, BuildHasher}
+};
 use rand_pcg::Pcg32;
 use rand::{Rng, SeedableRng};
 use seahash::SeaHasher;
 use regex::Regex;
-use crate::parsing::unescape;
+
+use crate::{
+	execution::{Macro, MacroError, MacroErrorKind},
+	parsing::unescape
+};
 
 macro_rules! count {
 	($tt: tt $($tts: tt)*) => {
@@ -156,10 +168,6 @@ fn truthy(string: impl AsRef<str>) -> bool {
 		v if f64::from_str(v).is_ok_and(|v| v > 0. && !v.is_nan()) => true,
 		_ => false
 	}
-}
-
-fn escape(s: impl Into<String>) -> String {
-	s.into().replace("\\", r"\\").replace("/", r"\/").replace("[", r"\/").replace("]", r"\/")
 }
 
 builtin_macros! {
@@ -250,7 +258,7 @@ builtin_macros! {
 	macro Unescape as "unescape" {
 		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (first_arg, ) = get_args!("unescape", range, arguments; first_arg);
-        	Ok(crate::parsing::unescape(first_arg).to_string())
+        	Ok(unescape(first_arg).to_string())
 		}
 	}
 
@@ -272,11 +280,11 @@ builtin_macros! {
 			// Technically refutable pattern
 			while let Some([condition, value]) = chunks.next() {
 				if truthy(condition) {
-					return Ok(value.to_string());
+					return Ok((*value).to_string());
 				}
 			}
 			if let [end] = chunks.remainder() {
-				Ok(end.to_string())
+				Ok((*end).to_string())
 			} else {
 				Err(MacroError {
 					name: "if".into(),
@@ -468,8 +476,8 @@ builtin_macros! {
 	macro Replace as "replace" {
 		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
  		  	let (haystack, pattern, replacement) = get_args!("hash", range, arguments; a, b, c);
-			let pattern = crate::parsing::unescape(&**pattern);
-			let replacement = crate::parsing::unescape(replacement);
+			let pattern = unescape(pattern);
+			let replacement = unescape(replacement);
  		  	let regex = Regex::new(&pattern).map_err(|err| {
 				let disp = match err {
 					regex::Error::Syntax(err) => {
@@ -636,7 +644,7 @@ builtin_macros! {
  		  	let (haystack, delimiter, index) = get_args!("split", range, arguments; a, b, c);
 			let index = convert_to_number!("split", range; <usize> at 1 => index);
  		  	haystack.split(&**delimiter).nth(index)
-				.map(|v| v.to_string())
+				.map(ToString::to_string)
  		  		.ok_or_else(|| MacroError::new(
  		  			"split".into(), range, MacroErrorKind::user(
  		  				format!("index {index} is out of bounds")
@@ -665,7 +673,7 @@ builtin_macros! {
  		  	}
 			let index = convert_to_number!("select", range; <usize> at 1 => index);
 			arguments.get(index)
-				.map(|v| v.to_string())
+				.map(ToString::to_string)
 				.ok_or_else(|| MacroError::new(
  		  			"select".into(), range, MacroErrorKind::user(
  		  				format!("index {index} is out of bounds")
@@ -1079,7 +1087,7 @@ builtin_macros! {
 	macro Error as "error" {
 		fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
 			Err(MacroError::new("error".into(), range, MacroErrorKind::user(
-				arguments.first().map_or(String::from("no reason given"), |v| v.to_string())
+				arguments.first().map_or(String::from("no reason given"), ToString::to_string)
 			)))
 		}		
 	}
@@ -1099,7 +1107,7 @@ builtin_macros! {
 				Ok(String::new())
 			} else {
 				Err(MacroError::new("assert".into(), range, MacroErrorKind::user(
-					arguments.get(1).map_or(String::from("no reason given"), |v| v.to_string())
+					arguments.get(1).map_or(String::from("no reason given"), ToString::to_string)
 				)))
 			}
 		}

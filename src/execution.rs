@@ -1,7 +1,9 @@
 //! Contains items pertaining to execution of macros on a given string.
 use crate::parsing;
-use std::collections::HashMap;
-use std::ops::Range;
+use std::{
+	collections::HashMap,
+	ops::Range
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 /// An error that can arise from a macro.

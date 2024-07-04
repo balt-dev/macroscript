@@ -3,8 +3,10 @@
 // Instead, this is a hidden export.
 #![doc(hidden)]
 #![allow(missing_docs)]
-use std::collections::HashMap;
-use std::error::Error;
+use std::{
+	collections::HashMap,
+	error::Error
+};
 
 pub fn test_output(test_string: &str) -> Result<(), Box<dyn Error>> {
 	for line in test_string.lines() {
