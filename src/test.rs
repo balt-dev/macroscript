@@ -27,7 +27,7 @@ pub fn test_output(test_string: &str) -> Result<(), Box<dyn Error>> {
 			Ok(v) => v.trim_ascii().to_string(),
 			Err(e) => format!("error: {}", e.error_type)
 		}; 
-		assert_eq!(end, result, "test case failed: {end:?} != {result:?}");
+		assert_eq!(end, result, "test case failed for {line}\n{end:?} != {result:?}");
 	}
 	Ok(())
 }

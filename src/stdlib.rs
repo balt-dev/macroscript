@@ -323,13 +323,12 @@ builtin_macros! {
     /// [truthy/0] -> false
     /// [truthy/ture] -> false
     /// [truthy/among us] -> false
-    /// [truthy/True] -> true
+    /// [truthy/True/true] -> true/true
     /// # "#)}
     /// ```
     macro Truthy as "truthy" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (first_arg, ) = get_args!("truthy", arguments; first_arg);
-               Ok(truthy(first_arg).to_string())
+               Ok(arguments.into_iter().map(truthy).join("/"))
           }        
     }
 
@@ -338,13 +337,12 @@ builtin_macros! {
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
     /// [is_number/1] -> true
-    /// [is_number/abc] -> false
+    /// [is_number/abc/2] -> false/true
     /// # "#)}
     /// ```
     macro IsNumber as "is_number" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (first_arg, ) = get_args!("is_number", arguments; first_arg);
-               Ok(f64::from_str(first_arg).is_ok().to_string())
+                Ok(arguments.into_iter().map(|v| f64::from_str(v).is_ok()).join("/"))
         }
     }
 
@@ -474,10 +472,13 @@ builtin_macros! {
     /// ```
     macro Hash as "hash" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("hash", arguments; a);
-               let mut hasher = SeaHasher::new();
-               hasher.write(value.as_bytes());
-               Ok(hasher.finish().to_string())            
+           Ok(
+                arguments.iter().map(|value| {
+                    let mut hasher = SeaHasher::new();
+                    hasher.write(value.as_bytes());
+                    hasher.finish()
+               }).join("/")
+            )
         }
     }
 
@@ -855,52 +856,52 @@ builtin_macros! {
         }
     }
 
-    /// Takes the bitwise NOT of a 64-bit signed integer input.
+    /// Takes the bitwise NOT of many 64-bit signed integer inputs.
     /// ### Example
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
     /// [#not/0] -> -1 (0b00...0 -> 0b11...1)
+    /// [#not/5/-4] -> -6/3
     /// # "#)}
     /// ```
     macro BitNot as "#not" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-            let (lhs, ) = get_args!("#not", arguments; a);
-            let lhs = convert_to_number!("#not"; <i64> at 1 => lhs);
-            Ok((!lhs).to_string())
+            arguments.iter().enumerate()
+                .map(|(idx, value)|
+                    Ok(!convert_to_number!("abs"; <i64> at idx + 1 => value))
+                ).process_results(|mut iter| iter.join("/"))
         }        
     }
 
-    /// Takes the bitwise AND of two 64-bit signed integer inputs.
+    /// Takes the bitwise AND of many 64-bit signed integer inputs.
     /// ### Examples
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
     /// [#and/11/5] -> 1 (0b1011 & 0b0101)
-    /// [#and/8/7] -> 0 (0b1000 & 0b0111)
+    /// [#and/8/13/7] -> 0 (0b1000 & 0b1101 & 0b0111)
     /// # "#)}
     /// ```
     macro BitAnd as "#and" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-            let (lhs, rhs) = get_args!("#and", arguments; a, b);
-            let lhs = convert_to_number!("#and"; <i64> at 1 => lhs);
-            let rhs = convert_to_number!("#and"; <i64> at 2 => rhs);
-            Ok((lhs & rhs).to_string())
+            arguments.iter().enumerate()
+                .map(|(idx, value)| Ok(convert_to_number!("#and"; <i64> at idx + 1 => value)))
+                .process_results(|iter| iter.reduce(|a, b| a & b).unwrap_or(0).to_string())
         }        
     }
     
-    /// Takes the bitwise OR of two 64-bit signed integer inputs.
+    /// Takes the bitwise OR of many 64-bit signed integer inputs.
     /// ### Examples
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
     /// [#or/5/3] -> 7 (0b0101 | 0b0011)
-    /// [#or/8/7] -> 15 (0b1000 | 0b0111)
+    /// [#or/9/5/2] -> 15 (0b1001 | 0b0101 | 0b0010)
     /// # "#)}
     /// ```
     macro BitOr as "#or" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-            let (lhs, rhs) = get_args!("#or", arguments; a, b);
-            let lhs = convert_to_number!("#or"; <i64> at 1 => lhs);
-            let rhs = convert_to_number!("#or"; <i64> at 2 => rhs);
-            Ok((lhs | rhs).to_string())
+            arguments.iter().enumerate()
+                .map(|(idx, value)| Ok(convert_to_number!("#or"; <i64> at idx + 1 => value)))
+                .process_results(|iter| iter.reduce(|a, b| a | b).unwrap_or(0).to_string())
         }        
     }
 
@@ -910,15 +911,14 @@ builtin_macros! {
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
     /// [#xor/5/3] -> 6 (0b0101 ^ 0b0011)
-    /// [#xor/8/11] -> 3 (0b1000 ^ 0b1011)
+    /// [#xor/8/11/5] -> 6 (0b1000 ^ 0b1011 ^ 0b0101)
     /// # "#)}
     /// ```
     macro BitXor as "#xor" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-            let (lhs, rhs) = get_args!("#xor", arguments; a, b);
-            let lhs = convert_to_number!("#xor"; <i64> at 1 => lhs);
-            let rhs = convert_to_number!("#xor"; <i64> at 2 => rhs);
-            Ok((lhs ^ rhs).to_string())
+            arguments.iter().enumerate()
+                .map(|(idx, value)| Ok(convert_to_number!("#xor"; <i64> at idx + 1 => value)))
+                .process_results(|iter| iter.reduce(|a, b| a ^ b).unwrap_or(0).to_string())
         }        
     }
 
@@ -1035,7 +1035,7 @@ builtin_macros! {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
             arguments.iter().enumerate()
                 .map(|(idx, value)|
-                    Ok(convert_to_number!("cos"; at idx + 1 => value).sin().to_string())
+                    Ok(convert_to_number!("cos"; at idx + 1 => value).cos().to_string())
                 ).process_results(|mut iter| iter.join("/"))
         }    
     }
@@ -1061,7 +1061,7 @@ builtin_macros! {
     /// ### Example
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
-    /// [asin/0/1] -> 0/3.14159265
+    /// [asin/0/1] -> 0/1.5707963267948966
     /// # "#)}
     /// ```
     macro InvSine as "asin" {
@@ -1077,14 +1077,14 @@ builtin_macros! {
     /// ### Example
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
-    /// [acos/1/0] -> 0/3.14159265
+    /// [acos/1/0] -> 0/1.5707963267948966
     /// # "#)}
     /// ```
     macro InvCosine as "acos" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
             arguments.iter().enumerate()
                 .map(|(idx, value)|
-                    Ok(convert_to_number!("sin"; at idx + 1 => value).sin().to_string())
+                    Ok(convert_to_number!("sin"; at idx + 1 => value).acos().to_string())
                 ).process_results(|mut iter| iter.join("/"))
         }    
     }
