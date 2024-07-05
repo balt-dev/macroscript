@@ -131,7 +131,7 @@ Returns whether a variable currently exists.
         $(
         /// ---
         ///
-        #[doc = concat!("# [` ", $name, "`](struct@", stringify!($id), ")")]
+        #[doc = concat!("# [`", $name, "`](struct@", stringify!($id), ")")]
         $(#[$attr])*
         ///
         )*
