@@ -519,6 +519,7 @@ builtin_macros! {
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
     /// [int/54.2] -> 54
     /// [int/-101/2] -> -5
+    /// [int/E621/16] -> 58913
     /// # "#)}
     /// ```
     macro Int as "int" {
@@ -548,13 +549,15 @@ builtin_macros! {
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
     /// [hex/16] -> 10
+    /// [hex/255/5] -> FF/5
     /// # "#)}
     /// ```
     macro Hex as "hex" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("hex", arguments; value);
-            let value = convert_to_number!("hex"; <i64> at 1 => value);
-            Ok(format!("{value:x}"))
+            arguments.iter().enumerate()
+                .map(|(idx, value)|
+                    Ok(format!("{:X}", convert_to_number!("hex"; <i64> at idx + 1 => value)))
+                ).process_results(|mut iter| iter.join("/"))
         }
     }
 
@@ -564,13 +567,15 @@ builtin_macros! {
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
     /// [bin/5] -> 101
+    /// [bin/7/8] -> 111/1000
     /// # "#)}
     /// ```
     macro Bin as "bin" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("bin", arguments; value);
-            let value = convert_to_number!("bin"; <i64> at 1 => value);
-            Ok(format!("{value:b}"))
+            arguments.iter().enumerate()
+                .map(|(idx, value)|
+                    Ok(format!("{:b}", convert_to_number!("bin"; <i64> at idx + 1 => value)))
+                ).process_results(|mut iter| iter.join("/"))
         }
     }
 
@@ -580,13 +585,15 @@ builtin_macros! {
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
     /// [oct/59] -> 73
+    /// [oct/1777/755] -> 3361/1363
     /// # "#)}
     /// ```
     macro Oct as "oct" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("bin", arguments; value);
-            let value = convert_to_number!("bin"; <i64> at 1 => value);
-            Ok(format!("{value:o}"))
+            arguments.iter().enumerate()
+                .map(|(idx, value)|
+                    Ok(format!("{:o}", convert_to_number!("oct"; <i64> at idx + 1 => value)))
+                ).process_results(|mut iter| iter.join("/"))
         }
     }
 
