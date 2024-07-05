@@ -991,23 +991,24 @@ builtin_macros! {
         }
     }
 
-    /// Gets the absolute value of a number.
+    /// Gets the absolute value of many numbers.
     /// ### Examples
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
     /// [abs/-5] -> 5
-    /// [abs/NaN] -> NaN
+    /// [abs/NaN/-inf] -> NaN/inf
     /// # "#)}
     /// ```
     macro Abs as "abs" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("abs", arguments; value);
-               let value = convert_to_number!("abs"; at 1 => value);
-            Ok(value.abs().to_string())
+            arguments.iter().enumerate()
+                .map(|(idx, value)|
+                    Ok(convert_to_number!("abs"; at idx + 1 => value).abs().to_string())
+                ).process_results(|mut iter| iter.join("/"))
         }    
     }
     
-    /// Gets the sine of a number.
+    /// Gets the sine of many numbers.
     /// ### Example
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
@@ -1016,13 +1017,14 @@ builtin_macros! {
     /// ```
     macro Sine as "sin" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("sin", arguments; value);
-               let value = convert_to_number!("sin"; at 1 => value);
-            Ok(value.sin().to_string())
+            arguments.iter().enumerate()
+                .map(|(idx, value)|
+                    Ok(convert_to_number!("sin"; at idx + 1 => value).sin().to_string())
+                ).process_results(|mut iter| iter.join("/"))
         }    
     }
 
-    /// Gets the cosine of a number.
+    /// Gets the cosine of many numbers.
     /// ### Example
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
@@ -1031,13 +1033,14 @@ builtin_macros! {
     /// ```
     macro Cosine as "cos" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("cos", arguments; value);
-               let value = convert_to_number!("cos"; at 1 => value);
-            Ok(value.cos().to_string())
+            arguments.iter().enumerate()
+                .map(|(idx, value)|
+                    Ok(convert_to_number!("cos"; at idx + 1 => value).sin().to_string())
+                ).process_results(|mut iter| iter.join("/"))
         }    
     }
     
-    /// Gets the tangent of a number.
+    /// Gets the tangent of many numbers.
     /// ### Example
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
@@ -1046,40 +1049,43 @@ builtin_macros! {
     /// ```
     macro Tangent as "tan" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("tan", arguments; value);
-               let value = convert_to_number!("tan"; at 1 => value);
-            Ok(value.tan().to_string())
+            arguments.iter().enumerate()
+                .map(|(idx, value)|
+                    Ok(convert_to_number!("tan"; at idx + 1 => value).tan().to_string())
+                ).process_results(|mut iter| iter.join("/"))
         }
     }
 
     
-    /// Gets the inverse sine of a number.
+    /// Gets the inverse sine of many numbers.
     /// ### Example
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
-    /// [asin/0] -> 0
+    /// [asin/0/1] -> 0/3.14159265
     /// # "#)}
     /// ```
     macro InvSine as "asin" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("asin", arguments; value);
-               let value = convert_to_number!("asin"; at 1 => value);
-            Ok(value.asin().to_string())
+            arguments.iter().enumerate()
+                .map(|(idx, value)|
+                    Ok(convert_to_number!("asin"; at idx + 1 => value).asin().to_string())
+                ).process_results(|mut iter| iter.join("/"))
         }    
     }
 
-    /// Gets the inverse cosine of a number.
+    /// Gets the inverse cosine of many numbers.
     /// ### Example
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
-    /// [acos/1] -> 0
+    /// [acos/1/0] -> 0/3.14159265
     /// # "#)}
     /// ```
     macro InvCosine as "acos" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("acos", arguments; value);
-               let value = convert_to_number!("acos"; at 1 => value);
-            Ok(value.acos().to_string())
+            arguments.iter().enumerate()
+                .map(|(idx, value)|
+                    Ok(convert_to_number!("sin"; at idx + 1 => value).sin().to_string())
+                ).process_results(|mut iter| iter.join("/"))
         }    
     }
     
@@ -1092,9 +1098,10 @@ builtin_macros! {
     /// ```
     macro InvTangent as "atan" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("atan", arguments; value);
-               let value = convert_to_number!("atan"; at 1 => value);
-            Ok(value.atan().to_string())
+            arguments.iter().enumerate()
+                .map(|(idx, value)|
+                    Ok(convert_to_number!("atan"; at idx + 1 => value).atan().to_string())
+                ).process_results(|mut iter| iter.join("/"))
         }
     }
 
@@ -1282,14 +1289,13 @@ builtin_macros! {
     /// ### Examples
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
-    /// [lower/VVVVVV] -> vvvvvv
+    /// [lower/VVVVVV/GO PLAY IT] -> vvvvvv/go play it
     /// [lower/ὈΔΥΣΣΕΎΣ] -> ὀδυσσεύς
     /// # "#)}
     /// ```
     macro Lower as "lower" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-              let (target, ) = get_args!("lower", arguments; a);
-            Ok(target.to_lowercase())
+            Ok(arguments.into_iter().map(str::to_lowercase).join("/"))
         }
     }
 
@@ -1297,14 +1303,13 @@ builtin_macros! {
     /// ### Examples
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
-    /// [upper/vvvvvv] -> VVVVVV
+    /// [upper/vvvvvv/go play it] -> VVVVVV/GO PLAY IT
     /// [upper/tschüß] -> TSCHÜSS
     /// # "#)}
     /// ```
     macro Upper as "upper" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-              let (target, ) = get_args!("upper", arguments; a);
-            Ok(target.to_uppercase())
+            Ok(arguments.into_iter().map(str::to_uppercase).join("/"))
         }
     }
 
