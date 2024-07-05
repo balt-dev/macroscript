@@ -24,10 +24,7 @@ use rand::{Rng, SeedableRng};
 use seahash::SeaHasher;
 use regex::Regex;
 
-use crate::{
-    execution::{Macro, MacroError, MacroErrorKind},
-    parsing::unescape
-};
+use crate::{execution::{Macro, MacroError, MacroErrorKind}, parsing::unescape, TextMacro};
 
 macro_rules! count {
     ($tt: tt $($tts: tt)*) => {
@@ -598,56 +595,54 @@ builtin_macros! {
     /// ### Examples
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
-    /// [ord/55296] -> error: invalid codepoint
-    /// [ord/65] -> A
+    /// [chr/55296] -> error: invalid codepoint at argument 1
+    /// [chr/65] -> A
+    /// [chr/65/109/111/110/103/32/85/115] -> Among Us
+    /// # "#)}
+    /// ```
+    macro Chr as "chr" {
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+            arguments
+                .iter().enumerate()
+                .map(|(idx, chr)| {
+                    let ord = convert_to_number!("chr"; <u32> at idx + 1 => *chr);
+                    char::from_u32(ord).ok_or_else(|| MacroError::new("chr".into(), MacroErrorKind::user(
+                        format!("invalid codepoint at argument {}", idx + 1)
+                    )))
+                }).collect()
+        }
+    }
+
+    /// Converts characters into their unicode codepoints.
+    /// ### Examples
+    /// ```
+    /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
+    /// [ord/] -> <no output>
+    /// [ord/A] -> 65
+    /// [ord/Among Us] -> 65/109/111/110/103/32/85/115
     /// # "#)}
     /// ```
     macro Ord as "ord" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
                let (value, ) = get_args!("ord", arguments; value);
-            let value = convert_to_number!("ord"; <u32> at 1 => value);
-            char::from_u32(value)
-                .map(|v| v.to_string())
-                .ok_or_else(|| MacroError::new("ord".into(), MacroErrorKind::user(
-                    "invalid codepoint"
-                )))
-        }
-    }
-
-    /// Converts a character into its unicode codepoint.
-    /// All extraneous characters are discarded.
-    /// ### Examples
-    /// ```
-    /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
-    /// [chr/] -> error: no input
-    /// [chr/A] -> 65
-    /// [chr/Among Us] -> 65
-    /// # "#)}
-    /// ```
-    macro Chr as "chr" {
-        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("chr", arguments; value);
-               value.chars().next()
+               Ok(value.chars()
                    .map(|c| (c as u32).to_string())
-                   .ok_or_else(|| MacroError::new("chr".into(), MacroErrorKind::user(
-                      "no input"
-                  )))
+                   .join("/"))
         }
     }
 
-    /// Gets the length of the first input.
+    /// Gets the length of the inputs.
     /// ### Examples
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
     /// [len/] -> 0
     /// [len/abc] -> 3
-    /// [len/abc/def] -> 3
+    /// [len/abc/de] -> 3/2
     /// # "#)}
     /// ```
     macro Length as "len" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("len", arguments; value);
-               Ok(value.chars().count().to_string())
+               Ok(arguments.into_iter().map(|c| c.chars().count().to_string()).join("/"))
         }
     }
 
@@ -702,20 +697,19 @@ builtin_macros! {
         }        
     }
 
-    /// Returns whether two strings are equal.
+    /// Returns whether many strings are equal.
     /// ### Examples
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
     /// [equal/one/one] -> true
-    /// [equal/one/two] -> false
+    /// [equal/one/two/three] -> false
     /// [equal/1/1] -> true
     /// [equal/1/1.0] -> false
     /// # "#)}
     /// ```
     macro Equal as "equal" {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (lhs, rhs) = get_args!("equal", arguments; a, b);
-            Ok((**lhs == **rhs).to_string()) // ** to convert &Cow<str> to str
+            Ok(arguments.windows(2).all(|w| *w[0] == *w[1]).to_string()) // ** to convert &Cow<str> to str
         }
     }
 
@@ -1304,6 +1298,44 @@ builtin_macros! {
         fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
               let (target, ) = get_args!("upper", arguments; a);
             Ok(target.to_uppercase())
+        }
+    }
+
+    /// Maps an escaped text macro over all of the inputs, returning the results as outputs.
+    /// # Example
+    /// ```
+    /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
+    /// [map/\[multiply\/$1\/2\]/1/2/3] -> 2/4/6
+    /// # "#)}
+    /// ```
+    macro Map as "map" {
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+            if arguments.len() == 1 { return Ok(String::new()) }
+            let (mac, ) = get_args!("map", arguments; a);
+            let mac = TextMacro::new(unescape(mac));
+            arguments
+                .iter()
+                .skip(1)
+                .map(|v| mac.apply(vec![v]))
+                .process_results(|mut v| v.join("/"))
+        }
+    }
+
+    /// Performs a fold with an escaped text macro over all of the inputs, taking the first as a base case.
+    /// # Example
+    /// ```
+    /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
+    /// [fold/\[add\/$1\/$2\]/0/1/2/3] -> 6
+    /// # "#)}
+    /// ```
+    macro Fold as "fold" {
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+            let (mac, base) = get_args!("map", arguments; a, b);
+            let mac = TextMacro::new(unescape(mac));
+            arguments
+                .iter()
+                .skip(2)
+                .try_fold((*base).to_string(), |a, b| mac.apply(vec![&a, *b]))
         }
     }
 }
