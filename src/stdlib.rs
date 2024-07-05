@@ -463,11 +463,11 @@ builtin_macros! {
         }
     }
 
-    /// Hashes a value, returning a 64-bit integer.
+    /// Hashes many values, returning 64-bit integers.
     /// ### Examples
     /// ```
     /// # use macroscript::test::test_output; fn main() -> Result<(), Box<dyn std::error::Error>> { test_output(r#"
-    /// [hash/rain world] -> 13463560454117874234
+    /// [hash/rain world/brain rot] -> -4983183619591677382/-1860790453662518022
     /// # "#)}
     /// ```
     macro Hash as "hash" {
@@ -476,7 +476,7 @@ builtin_macros! {
                 arguments.iter().map(|value| {
                     let mut hasher = SeaHasher::new();
                     hasher.write(value.as_bytes());
-                    hasher.finish()
+                    hasher.finish() as i64
                }).join("/")
             )
         }
