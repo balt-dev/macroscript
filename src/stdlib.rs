@@ -16,7 +16,6 @@ If you want to see the documentation for all macros at once, see [`Documentation
 use itertools::Itertools;
 use std::{
     collections::HashMap,
-    ops::Range,
     str::FromStr,
     hash::{Hasher, BuildHasher}
 };
@@ -148,34 +147,34 @@ Returns whether a variable currently exists.
 }
 
 macro_rules! get_args {
-    ($name: literal, $range: ident, $arguments: ident; $($ids: ident),+) => {{
+    ($name: literal, $arguments: ident; $($ids: ident),+) => {{
         let mut args = $arguments.iter();
         let c = count!($($ids)*);
-        get_args!{_recur $name $range args; c $($ids)* | }
+        get_args!{_recur $name args; c $($ids)* | }
     }};
-    (_recur $name: literal $range: ident $args: ident; $amount: ident $id: ident $($ids: ident)* | $($leftover: ident)*) => {
+    (_recur $name: literal $args: ident; $amount: ident $id: ident $($ids: ident)* | $($leftover: ident)*) => {
         let Some($id) = $args.next() else {
               return Err(MacroError::new(
-                  $name.into(), $range,
+                  $name.into(),
                   MacroErrorKind::not_enough_args($amount, count!($($leftover)*))
               ));
           };
-        get_args!{ _recur $name $range $args; $amount $($ids)* | $($leftover)* $id }
+        get_args!{ _recur $name $args; $amount $($ids)* | $($leftover)* $id }
     };
-    (_recur $name: literal $range: ident $args: ident; $amount: ident | $($leftover: ident)*) => {
+    (_recur $name: literal $args: ident; $amount: ident | $($leftover: ident)*) => {
         ($($leftover,)*)
     }
 }
 
 macro_rules! convert_to_number {
-    ($name: literal, $range: expr; at $idx: expr => $arg: expr) => {
-        convert_to_number!($name, $range; <f64> at $idx => $arg)
+    ($name: literal; at $idx: expr => $arg: expr) => {
+        convert_to_number!($name; <f64> at $idx => $arg)
     };
-    ($name: literal, $range: expr; <$ty: ty> at $idx: expr => $arg: expr) => {{
+    ($name: literal; <$ty: ty> at $idx: expr => $arg: expr) => {{
         let arg = $arg;
         <$ty>::from_str(arg).map_err(|_| {
             MacroError::new(
-                $name.into(), $range.clone(),
+                $name.into(),
                 MacroErrorKind::user(
                     format!("could not convert argument {} \"{arg}\" to {}", $idx, stringify!($ty))
                    )
@@ -201,7 +200,7 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Comment as "" {
-        fn apply(&self, _range: Range<usize>, _arguments: Vec<&str>) -> Result<String, MacroError> {
+        fn apply(&self, _arguments: Vec<&str>) -> Result<String, MacroError> {
             Ok(String::new())
         }        
     }
@@ -214,7 +213,7 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Reverse as "reverse" {
-        fn apply(&self, _range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
             Ok(
                 arguments
                 .into_iter()
@@ -235,12 +234,12 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Add as "add" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
             arguments
                 .iter()
                 .enumerate()
                 .map(|(idx, arg)| {
-                    Ok(convert_to_number!("add", range; at idx+1 => arg))
+                    Ok(convert_to_number!("add"; at idx+1 => arg))
                 })
                 .process_results(|iter| iter.sum())
                 .map(|sum: f64| sum.to_string())
@@ -257,12 +256,12 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Multiply as "multiply" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
             arguments
                 .iter()
                 .enumerate()
                 .map(|(idx, arg)| {
-                    Ok(convert_to_number!("multiply", range; at idx+1 => arg))
+                    Ok(convert_to_number!("multiply"; at idx+1 => arg))
                 })
                 .process_results(|iter| iter.product())
                 .map(|product: f64| product.to_string())
@@ -278,8 +277,8 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Unescape as "unescape" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (first_arg, ) = get_args!("unescape", range, arguments; first_arg);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (first_arg, ) = get_args!("unescape", arguments; first_arg);
             Ok(unescape(first_arg).to_string())
         }
     }
@@ -297,7 +296,7 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro If as "if" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
             let mut chunks = arguments.chunks_exact(2);
             // Technically refutable pattern
             while let Some([condition, value]) = chunks.next() {
@@ -312,8 +311,7 @@ builtin_macros! {
                     name: "if".into(),
                     error_type: MacroErrorKind::User {
                         message: "all conditions exhausted".into()
-                    },
-                    range
+                    }
                 })
             }
         }
@@ -332,8 +330,8 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Truthy as "truthy" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (first_arg, ) = get_args!("truthy", range, arguments; first_arg);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (first_arg, ) = get_args!("truthy", arguments; first_arg);
                Ok(truthy(first_arg).to_string())
           }        
     }
@@ -347,8 +345,8 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro IsNumber as "is_number" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (first_arg, ) = get_args!("is_number", range, arguments; first_arg);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (first_arg, ) = get_args!("is_number", arguments; first_arg);
                Ok(f64::from_str(first_arg).is_ok().to_string())
         }
     }
@@ -361,10 +359,10 @@ builtin_macros! {
     /// # "#)}
     /// ``` 
     macro Pow as "pow" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (base, exp) = get_args!("pow", range, arguments; base, exp);
-               let base = convert_to_number!("pow", range; at 1 => base);
-               let exp = convert_to_number!("pow", range; at 2 => exp);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (base, exp) = get_args!("pow", arguments; base, exp);
+               let base = convert_to_number!("pow"; at 1 => base);
+               let exp = convert_to_number!("pow"; at 2 => exp);
             Ok(base.powf(exp).to_string())
         }
     }
@@ -378,10 +376,10 @@ builtin_macros! {
     /// # "#)}
     /// ``` 
     macro Sub as "subtract" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (lhs, rhs) = get_args!("subtract", range, arguments; a, b);
-               let lhs = convert_to_number!("subtract", range; at 1 => lhs);
-               let rhs = convert_to_number!("subtract", range; at 2 => rhs);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (lhs, rhs) = get_args!("subtract", arguments; a, b);
+               let lhs = convert_to_number!("subtract"; at 1 => lhs);
+               let rhs = convert_to_number!("subtract"; at 2 => rhs);
             Ok((lhs - rhs).to_string())
         }
     }
@@ -398,10 +396,10 @@ builtin_macros! {
     /// # "#)}
     /// ``` 
     macro Div as "divide" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (lhs, rhs) = get_args!("divide", range, arguments; a, b);
-               let lhs = convert_to_number!("divide", range; at 1 => lhs);
-               let rhs = convert_to_number!("divide", range; at 2 => rhs);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (lhs, rhs) = get_args!("divide", arguments; a, b);
+               let lhs = convert_to_number!("divide"; at 1 => lhs);
+               let rhs = convert_to_number!("divide"; at 2 => rhs);
             Ok((lhs / rhs).to_string())
         }
     }
@@ -415,10 +413,10 @@ builtin_macros! {
     /// # "#)}
     /// ``` 
     macro Modulus as "mod" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (lhs, rhs) = get_args!("mod", range, arguments; a, b);
-               let lhs = convert_to_number!("mod", range; at 1 => lhs);
-               let rhs = convert_to_number!("mod", range; at 2 => rhs);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (lhs, rhs) = get_args!("mod", arguments; a, b);
+               let lhs = convert_to_number!("mod"; at 1 => lhs);
+               let rhs = convert_to_number!("mod"; at 2 => rhs);
             Ok(lhs.rem_euclid(rhs).to_string())
         }
     }
@@ -433,11 +431,11 @@ builtin_macros! {
     /// # "#)}
     /// ``` 
     macro Log as "log" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("log", range, arguments; value);
-               let value = convert_to_number!("log", range; at 1 => value);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (value, ) = get_args!("log", arguments; value);
+               let value = convert_to_number!("log"; at 1 => value);
                let base = if let Some(base) = arguments.get(1) {
-                   convert_to_number!("log", range; at 2 => base)
+                   convert_to_number!("log"; at 2 => base)
                } else {
                    std::f64::consts::E
                };
@@ -457,7 +455,7 @@ builtin_macros! {
     /// # "#)}
     /// ``` 
     macro Rand as "rand" {
-        fn apply(&self, _range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
                let value: f64 = if let Some(seed) = arguments.first() {
                    let mut hasher = SeaHasher::new();
                    hasher.write(seed.as_bytes());
@@ -478,8 +476,8 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Hash as "hash" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("hash", range, arguments; a);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (value, ) = get_args!("hash", arguments; a);
                let mut hasher = SeaHasher::new();
                hasher.write(value.as_bytes());
                Ok(hasher.finish().to_string())            
@@ -496,8 +494,8 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Replace as "replace" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (haystack, pattern, replacement) = get_args!("hash", range, arguments; a, b, c);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (haystack, pattern, replacement) = get_args!("hash", arguments; a, b, c);
             let pattern = unescape(pattern);
             let replacement = unescape(replacement);
                let regex = Regex::new(&pattern).map_err(|err| {
@@ -511,7 +509,7 @@ builtin_macros! {
                         format!("compiled regex exceeds size limit of {limit} bytes"),
                     _ => err.to_string()
                 };
-                MacroError::new("replace".into(), range.clone(), MacroErrorKind::user(disp))
+                MacroError::new("replace".into(), MacroErrorKind::user(disp))
             })?;
                let res = regex.replace_all(haystack, replacement);
                Ok(res.into_owned())
@@ -527,22 +525,22 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Int as "int" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("int", range, arguments; value);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (value, ) = get_args!("int", arguments; value);
                if let Some(base) = arguments.get(1) {
-                let base = convert_to_number!("int", range; <u32> at 2 => base);
+                let base = convert_to_number!("int"; <u32> at 2 => base);
                 if !(2 ..= 36).contains(&base) {
-                    return Err(MacroError::new("int".into(), range, MacroErrorKind::user(
+                    return Err(MacroError::new("int".into(), MacroErrorKind::user(
                         format!("invalid base {base} (must be between 2 and 36, inclusive)")
                     )));
                 }
                  i64::from_str_radix(value, base)
                      .map(|v| v.to_string())
-                     .map_err(|_| MacroError::new("int".into(), range, MacroErrorKind::user(
+                     .map_err(|_| MacroError::new("int".into(), MacroErrorKind::user(
                          format!("failed to convert {value} to a number with base {base}")
                      )))
              } else {
-                     let value = convert_to_number!("int", range; at 1 => value) as i64;
+                     let value = convert_to_number!("int"; at 1 => value) as i64;
                    Ok(value.to_string())
                }
         }
@@ -556,9 +554,9 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Hex as "hex" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("hex", range, arguments; value);
-            let value = convert_to_number!("hex", range; <i64> at 1 => value);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (value, ) = get_args!("hex", arguments; value);
+            let value = convert_to_number!("hex"; <i64> at 1 => value);
             Ok(format!("{value:x}"))
         }
     }
@@ -572,9 +570,9 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Bin as "bin" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("bin", range, arguments; value);
-            let value = convert_to_number!("bin", range; <i64> at 1 => value);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (value, ) = get_args!("bin", arguments; value);
+            let value = convert_to_number!("bin"; <i64> at 1 => value);
             Ok(format!("{value:b}"))
         }
     }
@@ -588,9 +586,9 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Oct as "oct" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("bin", range, arguments; value);
-            let value = convert_to_number!("bin", range; <i64> at 1 => value);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (value, ) = get_args!("bin", arguments; value);
+            let value = convert_to_number!("bin"; <i64> at 1 => value);
             Ok(format!("{value:o}"))
         }
     }
@@ -605,12 +603,12 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Ord as "ord" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("ord", range, arguments; value);
-            let value = convert_to_number!("ord", range; <u32> at 1 => value);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (value, ) = get_args!("ord", arguments; value);
+            let value = convert_to_number!("ord"; <u32> at 1 => value);
             char::from_u32(value)
                 .map(|v| v.to_string())
-                .ok_or_else(|| MacroError::new("ord".into(), range, MacroErrorKind::user(
+                .ok_or_else(|| MacroError::new("ord".into(), MacroErrorKind::user(
                     "invalid codepoint"
                 )))
         }
@@ -627,11 +625,11 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Chr as "chr" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("chr", range, arguments; value);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (value, ) = get_args!("chr", arguments; value);
                value.chars().next()
                    .map(|c| (c as u32).to_string())
-                   .ok_or_else(|| MacroError::new("chr".into(), range, MacroErrorKind::user(
+                   .ok_or_else(|| MacroError::new("chr".into(), MacroErrorKind::user(
                       "no input"
                   )))
         }
@@ -647,8 +645,8 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Length as "len" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("len", range, arguments; value);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (value, ) = get_args!("len", arguments; value);
                Ok(value.chars().count().to_string())
         }
     }
@@ -662,13 +660,13 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Split as "split" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (haystack, delimiter, index) = get_args!("split", range, arguments; a, b, c);
-            let index = convert_to_number!("split", range; <usize> at 1 => index);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (haystack, delimiter, index) = get_args!("split", arguments; a, b, c);
+            let index = convert_to_number!("split"; <usize> at 1 => index);
                haystack.split(&**delimiter).nth(index)
                 .map(ToString::to_string)
                    .ok_or_else(|| MacroError::new(
-                       "split".into(), range, MacroErrorKind::user(
+                       "split".into(), MacroErrorKind::user(
                            format!("index {index} is out of bounds")
                        )
                    ))
@@ -688,16 +686,16 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Select as "select" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (index, ) = get_args!("select", range, arguments; a);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (index, ) = get_args!("select", arguments; a);
                if *index == "#" {
                    return Ok((arguments.len() - 1).to_string());
                }
-            let index = convert_to_number!("select", range; <usize> at 1 => index);
+            let index = convert_to_number!("select"; <usize> at 1 => index);
             arguments.get(index)
                 .map(ToString::to_string)
                 .ok_or_else(|| MacroError::new(
-                       "select".into(), range, MacroErrorKind::user(
+                       "select".into(), MacroErrorKind::user(
                            format!("index {index} is out of bounds")
                        )
                    ))
@@ -715,8 +713,8 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Equal as "equal" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (lhs, rhs) = get_args!("equal", range, arguments; a, b);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (lhs, rhs) = get_args!("equal", arguments; a, b);
             Ok((**lhs == **rhs).to_string()) // ** to convert &Cow<str> to str
         }
     }
@@ -731,10 +729,10 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro NumEqual as "#equal" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (lhs, rhs) = get_args!("#equal", range, arguments; a, b);
-            let lhs = convert_to_number!("#equal", range; at 1 => lhs);
-            let rhs = convert_to_number!("#equal", range; at 2 => rhs);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (lhs, rhs) = get_args!("#equal", arguments; a, b);
+            let lhs = convert_to_number!("#equal"; at 1 => lhs);
+            let rhs = convert_to_number!("#equal"; at 2 => rhs);
             Ok((lhs == rhs).to_string())
         }
     }
@@ -749,10 +747,10 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Greater as "greater" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (lhs, rhs) = get_args!("greater", range, arguments; a, b);
-            let lhs = convert_to_number!("greater", range; at 1 => lhs);
-            let rhs = convert_to_number!("greater", range; at 2 => rhs);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (lhs, rhs) = get_args!("greater", arguments; a, b);
+            let lhs = convert_to_number!("greater"; at 1 => lhs);
+            let rhs = convert_to_number!("greater"; at 2 => rhs);
             Ok((lhs > rhs).to_string())
         }
     }
@@ -767,10 +765,10 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Less as "less" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (lhs, rhs) = get_args!("less", range, arguments; a, b);
-            let lhs = convert_to_number!("less", range; at 1 => lhs);
-            let rhs = convert_to_number!("less", range; at 2 => rhs);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (lhs, rhs) = get_args!("less", arguments; a, b);
+            let lhs = convert_to_number!("less"; at 1 => lhs);
+            let rhs = convert_to_number!("less"; at 2 => rhs);
             Ok((lhs < rhs).to_string())
         }
     }
@@ -784,7 +782,7 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Not as "not" {
-        fn apply(&self, _range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
             Ok(
                 arguments.iter()
                     .map(truthy)
@@ -804,7 +802,7 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro And as "and" {
-        fn apply(&self, _range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
             Ok(
                 arguments.iter()
                     .map(truthy)
@@ -824,7 +822,7 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Or as "or" {
-        fn apply(&self, _range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
             Ok(
                 arguments.iter()
                     .map(truthy)
@@ -845,7 +843,7 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Xor as "xor" {
-        fn apply(&self, _range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
             Ok(
                 arguments.iter()
                     .map(truthy)
@@ -864,9 +862,9 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro BitNot as "#not" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-            let (lhs, ) = get_args!("#not", range, arguments; a);
-            let lhs = convert_to_number!("#not", range; <i64> at 1 => lhs);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+            let (lhs, ) = get_args!("#not", arguments; a);
+            let lhs = convert_to_number!("#not"; <i64> at 1 => lhs);
             Ok((!lhs).to_string())
         }        
     }
@@ -880,10 +878,10 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro BitAnd as "#and" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-            let (lhs, rhs) = get_args!("#and", range, arguments; a, b);
-            let lhs = convert_to_number!("#and", range; <i64> at 1 => lhs);
-            let rhs = convert_to_number!("#and", range; <i64> at 2 => rhs);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+            let (lhs, rhs) = get_args!("#and", arguments; a, b);
+            let lhs = convert_to_number!("#and"; <i64> at 1 => lhs);
+            let rhs = convert_to_number!("#and"; <i64> at 2 => rhs);
             Ok((lhs & rhs).to_string())
         }        
     }
@@ -897,10 +895,10 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro BitOr as "#or" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-            let (lhs, rhs) = get_args!("#or", range, arguments; a, b);
-            let lhs = convert_to_number!("#or", range; <i64> at 1 => lhs);
-            let rhs = convert_to_number!("#or", range; <i64> at 2 => rhs);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+            let (lhs, rhs) = get_args!("#or", arguments; a, b);
+            let lhs = convert_to_number!("#or"; <i64> at 1 => lhs);
+            let rhs = convert_to_number!("#or"; <i64> at 2 => rhs);
             Ok((lhs | rhs).to_string())
         }        
     }
@@ -915,10 +913,10 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro BitXor as "#xor" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-            let (lhs, rhs) = get_args!("#xor", range, arguments; a, b);
-            let lhs = convert_to_number!("#xor", range; <i64> at 1 => lhs);
-            let rhs = convert_to_number!("#xor", range; <i64> at 2 => rhs);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+            let (lhs, rhs) = get_args!("#xor", arguments; a, b);
+            let lhs = convert_to_number!("#xor"; <i64> at 1 => lhs);
+            let rhs = convert_to_number!("#xor"; <i64> at 2 => rhs);
             Ok((lhs ^ rhs).to_string())
         }        
     }
@@ -933,14 +931,14 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro ShiftLeft as "shl" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-            let (lhs, rhs) = get_args!("shl", range, arguments; a, b);
-            let lhs = convert_to_number!("shl", range; <i64> at 1 => lhs) as u64;
-            let rhs = convert_to_number!("shl", range; <u32> at 2 => rhs);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+            let (lhs, rhs) = get_args!("shl", arguments; a, b);
+            let lhs = convert_to_number!("shl"; <i64> at 1 => lhs) as u64;
+            let rhs = convert_to_number!("shl"; <u32> at 2 => rhs);
             lhs.checked_shl(rhs)
                 .map(|v| (v as i64).to_string())
                 .ok_or_else(|| MacroError::new(
-                    "shl".into(), range,
+                    "shl".into(),
                     MacroErrorKind::user(format!("shift amount of {rhs} is too large"))
                 ))
         }
@@ -956,14 +954,14 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro ShiftRight as "shr" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-            let (lhs, rhs) = get_args!("shr", range, arguments; a, b);
-            let lhs = convert_to_number!("shr", range; <i64> at 1 => lhs) as u64;
-            let rhs = convert_to_number!("shr", range; <u32> at 2 => rhs);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+            let (lhs, rhs) = get_args!("shr", arguments; a, b);
+            let lhs = convert_to_number!("shr"; <i64> at 1 => lhs) as u64;
+            let rhs = convert_to_number!("shr"; <u32> at 2 => rhs);
             lhs.checked_shr(rhs)
                 .map(|v| (v as i64).to_string())
                 .ok_or_else(|| MacroError::new(
-                    "shr".into(), range,
+                    "shr".into(),
                     MacroErrorKind::user(format!("shift amount of {rhs} is too large"))
                 ))
         }
@@ -979,14 +977,14 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro ArithmeticShiftRight as "#shr" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-            let (lhs, rhs) = get_args!("#shr", range, arguments; a, b);
-            let lhs = convert_to_number!("#shr", range; <i64> at 1 => lhs);
-            let rhs = convert_to_number!("#shr", range; <u32> at 2 => rhs);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+            let (lhs, rhs) = get_args!("#shr", arguments; a, b);
+            let lhs = convert_to_number!("#shr"; <i64> at 1 => lhs);
+            let rhs = convert_to_number!("#shr"; <u32> at 2 => rhs);
             lhs.checked_shr(rhs)
                 .map(|v| v.to_string())
                 .ok_or_else(|| MacroError::new(
-                    "#shr".into(), range,
+                    "#shr".into(),
                     MacroErrorKind::user(format!("shift amount of {rhs} is too large"))
                 ))
         }
@@ -1001,9 +999,9 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Abs as "abs" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("abs", range, arguments; value);
-               let value = convert_to_number!("abs", range; at 1 => value);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (value, ) = get_args!("abs", arguments; value);
+               let value = convert_to_number!("abs"; at 1 => value);
             Ok(value.abs().to_string())
         }    
     }
@@ -1016,9 +1014,9 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Sine as "sin" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("sin", range, arguments; value);
-               let value = convert_to_number!("sin", range; at 1 => value);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (value, ) = get_args!("sin", arguments; value);
+               let value = convert_to_number!("sin"; at 1 => value);
             Ok(value.sin().to_string())
         }    
     }
@@ -1031,9 +1029,9 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Cosine as "cos" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("cos", range, arguments; value);
-               let value = convert_to_number!("cos", range; at 1 => value);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (value, ) = get_args!("cos", arguments; value);
+               let value = convert_to_number!("cos"; at 1 => value);
             Ok(value.cos().to_string())
         }    
     }
@@ -1046,9 +1044,9 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Tangent as "tan" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("tan", range, arguments; value);
-               let value = convert_to_number!("tan", range; at 1 => value);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (value, ) = get_args!("tan", arguments; value);
+               let value = convert_to_number!("tan"; at 1 => value);
             Ok(value.tan().to_string())
         }
     }
@@ -1062,9 +1060,9 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro InvSine as "asin" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("asin", range, arguments; value);
-               let value = convert_to_number!("asin", range; at 1 => value);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (value, ) = get_args!("asin", arguments; value);
+               let value = convert_to_number!("asin"; at 1 => value);
             Ok(value.asin().to_string())
         }    
     }
@@ -1077,9 +1075,9 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro InvCosine as "acos" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("acos", range, arguments; value);
-               let value = convert_to_number!("acos", range; at 1 => value);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (value, ) = get_args!("acos", arguments; value);
+               let value = convert_to_number!("acos"; at 1 => value);
             Ok(value.acos().to_string())
         }    
     }
@@ -1092,9 +1090,9 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro InvTangent as "atan" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (value, ) = get_args!("atan", range, arguments; value);
-               let value = convert_to_number!("atan", range; at 1 => value);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (value, ) = get_args!("atan", arguments; value);
+               let value = convert_to_number!("atan"; at 1 => value);
             Ok(value.atan().to_string())
         }
     }
@@ -1107,8 +1105,8 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Error as "error" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-            Err(MacroError::new("error".into(), range, MacroErrorKind::user(
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+            Err(MacroError::new("error".into(), MacroErrorKind::user(
                 arguments.first().map_or(String::from("no reason given"), ToString::to_string)
             )))
         }        
@@ -1123,12 +1121,12 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Assert as "assert" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (condition, ) = get_args!("assert", range, arguments; a);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (condition, ) = get_args!("assert", arguments; a);
             if truthy(condition) {
                 Ok(String::new())
             } else {
-                Err(MacroError::new("assert".into(), range, MacroErrorKind::user(
+                Err(MacroError::new("assert".into(), MacroErrorKind::user(
                     arguments.get(1).map_or(String::from("no reason given"), ToString::to_string)
                 )))
             }
@@ -1148,20 +1146,20 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Slice as "slice" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-               let (haystack, start, end) = get_args!("slice", range, arguments; a, b, c);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+               let (haystack, start, end) = get_args!("slice", arguments; a, b, c);
             let start = (!start.is_empty())
-                .then(|| Ok(convert_to_number!("slice", range; <usize> at 2 => start)))
+                .then(|| Ok(convert_to_number!("slice"; <usize> at 2 => start)))
                 .transpose()?;
             let end = (!end.is_empty())
-                .then(|| Ok(convert_to_number!("slice", range; <usize> at 3 => end)))
+                .then(|| Ok(convert_to_number!("slice"; <usize> at 3 => end)))
                 .transpose()?;
             let step = arguments.get(3)
-                    .map(|v| Ok(convert_to_number!("slice", range; <isize> at 4 => v)))
+                    .map(|v| Ok(convert_to_number!("slice"; <isize> at 4 => v)))
                     .transpose()?
                     .unwrap_or(1);
             if step == 0 {
-                return Err(MacroError::new("slice".into(), range, MacroErrorKind::user(
+                return Err(MacroError::new("slice".into(), MacroErrorKind::user(
                     "cannot have a step length of 0"
                 )))
             }
@@ -1173,7 +1171,7 @@ builtin_macros! {
                     .and_then(|(s, _)| Some((s, haystack.char_indices().nth(e)?)))
                     .and_then(|(s, (e, _))| haystack.get(s..e))
             }) else {
-                return Err(MacroError::new("slice".into(), range, MacroErrorKind::user(
+                return Err(MacroError::new("slice".into(), MacroErrorKind::user(
                     format!(
                         "part of range \"{}..{}\" is out of bounds for string of length {}",
                         start.map(|v| v.to_string()).unwrap_or_default(),
@@ -1208,8 +1206,8 @@ builtin_macros! {
     /// # "#)}
     /// ```
      macro Find as "find" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-              let (haystack, needle) = get_args!("find", range, arguments; a, b);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+              let (haystack, needle) = get_args!("find", arguments; a, b);
             
             Ok(haystack.find(&**needle).map_or(-1, |v| {
                 haystack[..v].chars().count() as isize
@@ -1227,8 +1225,8 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Count as "count" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-              let (haystack, needle) = get_args!("count", range, arguments; a, b);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+              let (haystack, needle) = get_args!("count", arguments; a, b);
             Ok(haystack.matches(&**needle).count().to_string())
         }
     }
@@ -1242,8 +1240,8 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Join as "join" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-              let (delimiter, ) = get_args!("join", range, arguments; a);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+              let (delimiter, ) = get_args!("join", arguments; a);
               Ok(arguments.iter().skip(1).join(&unescape(delimiter)))
         }        
     }
@@ -1257,7 +1255,7 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Escape as "escape" {
-        fn apply(&self, _range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
               let raw = arguments.join("/");
               Ok(raw.replace('\\', r"\\").replace('/', r"\/").replace('[', r"\[").replace(']', r"\]"))
         }
@@ -1272,9 +1270,9 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Repeat as "repeat" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-              let (target, count) = get_args!("repeat", range, arguments; a, b);
-            let count = convert_to_number!("repeat", range; <usize> at 2 => count);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+              let (target, count) = get_args!("repeat", arguments; a, b);
+            let count = convert_to_number!("repeat"; <usize> at 2 => count);
             Ok(std::iter::repeat(target).take(count).join(arguments.get(2).map_or("", |v| &**v)))
         }
     }
@@ -1288,8 +1286,8 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Lower as "lower" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-              let (target, ) = get_args!("lower", range, arguments; a);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+              let (target, ) = get_args!("lower", arguments; a);
             Ok(target.to_lowercase())
         }
     }
@@ -1303,8 +1301,8 @@ builtin_macros! {
     /// # "#)}
     /// ```
     macro Upper as "upper" {
-        fn apply(&self, range: Range<usize>, arguments: Vec<&str>) -> Result<String, MacroError> {
-              let (target, ) = get_args!("upper", range, arguments; a);
+        fn apply(&self, arguments: Vec<&str>) -> Result<String, MacroError> {
+              let (target, ) = get_args!("upper", arguments; a);
             Ok(target.to_uppercase())
         }
     }

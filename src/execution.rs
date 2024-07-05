@@ -1,9 +1,6 @@
 //! Contains items pertaining to execution of macros on a given string.
 use crate::parsing;
-use std::{
-	collections::HashMap,
-	ops::Range
-};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 /// An error that can arise from a macro.
@@ -78,7 +75,6 @@ pub trait Macro {
     /// If the macro fails to apply, an error will be raised with a message.
     fn apply(
         &self,
-        range: Range<usize>,
         arguments: Vec<&str>,
     ) -> Result<String, MacroError>;
 }
@@ -228,7 +224,7 @@ pub fn apply_macros(
                     let Some(mac) = macros.get(other) else {
 						throw_error!((dne) 'try_loop, try_stack, other);
                     };
-                    let replace = match mac.apply(range.clone(), macro_range.arguments) {
+                    let replace = match mac.apply(macro_range.arguments) {
                     	Ok(value) => value,
                     	Err(err) => {throw_error!('try_loop, try_stack, err.clone());}
                     }; 
