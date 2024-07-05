@@ -11,16 +11,14 @@ pub struct MacroError {
 	/// The name of the macro that failed.
 	pub name: String,
     /// The type of error that occurred.
-    pub error_type: MacroErrorKind,
-    /// The range of the macro that errored.
-    pub range: Range<usize>,
+    pub error_type: MacroErrorKind
 }
 
 impl MacroError {
 	/// Creates an error.
 	#[must_use]
-	pub fn new(name: String, range: Range<usize>, kind: MacroErrorKind) -> Self {
-		MacroError { name, range, error_type: kind }
+	pub fn new(name: String, kind: MacroErrorKind) -> Self {
+		MacroError { name, error_type: kind }
 	}
 }
 
@@ -68,7 +66,7 @@ impl std::error::Error for MacroError {}
 
 impl std::fmt::Display for MacroError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "error in macro {} at range {:?}: {}", self.name, self.range, self.error_type)
+        write!(f, "error in macro {}: {}", self.name, self.error_type)
     }
 }
 
@@ -98,30 +96,27 @@ macro_rules! throw_error {
 		}
 		return Err($expr);
 	};
-	((dne) $label: tt, $try_stack: ident, $name: expr; $range: expr) => {
+	((dne) $label: tt, $try_stack: ident, $name: expr) => {
 		throw_error!($label, $try_stack, MacroError {
         	name: $name.into(), 
-        	error_type: MacroErrorKind::Nonexistent,
-       		range: $range
+        	error_type: MacroErrorKind::Nonexistent
        	})
 	};
-	((not_enough) $label: tt, $try_stack: ident, $name: literal, $expected: literal, $found: literal, $range: expr) => {
+	((not_enough) $label: tt, $try_stack: ident, $name: literal, $expected: literal, $found: literal) => {
 		throw_error!($label, $try_stack, MacroError {
         	name: $name.into(), 
         	error_type: MacroErrorKind::NotEnoughArguments {
         		expected: $expected,
         		found: $found
-       		},
-       		range: $range
+       		}
        	})
 	};
-	((user) $label: tt, $try_stack: ident, $name: literal, $message: literal, $range: expr; $($tt: tt)*) => {
+	((user) $label: tt, $try_stack: ident, $name: literal, $message: literal; $($tt: tt)*) => {
 		throw_error!($label, $try_stack, MacroError {
         	name: $name.into(), 
         	error_type: MacroErrorKind::User {
         		message: format!($message, $($tt)*)
-       		},
-       		range: $range
+       		}
        	})
 	}
 }
@@ -144,9 +139,8 @@ pub fn apply_macros(
                     let mac_range = macro_range.range;
                     let Some(new_input) = macro_range.arguments.first() else {
                         throw_error!((not_enough) 
-                        	'try_loop, try_stack, "try", 
-							1, 0,
-                       		mac_range.clone()
+                        	'try_loop, try_stack, "try",
+							1, 0
                        	);
                     };
                     let new_input = parsing::unescape(new_input).into_owned();
@@ -157,17 +151,15 @@ pub fn apply_macros(
                 "load" => {
                     let Some(name) = macro_range.arguments.first() else {
                         throw_error!((not_enough) 
-                        	'try_loop, try_stack, "load", 
-							1, 0,
-                      		macro_range.range.clone()
+                        	'try_loop, try_stack, "load",
+							1, 0
                        	);
                     };
                     let range = macro_range.range;
                     let Some(value) = variables.get(*name) else {
                         throw_error!((user)
-                        	'try_loop, try_stack, "load", 
-                        	"variable \"{}\" does not currently exist",
-                       		range.clone();
+                        	'try_loop, try_stack, "load",
+                        	"variable \"{}\" does not currently exist";
                        		name
                        	);
                     };
@@ -176,9 +168,8 @@ pub fn apply_macros(
                 "drop" => {
                     let Some(name) = macro_range.arguments.first() else {
                         throw_error!((not_enough) 
-                        	'try_loop, try_stack, "drop", 
-							1, 0,
-                       		macro_range.range.clone()
+                        	'try_loop, try_stack, "drop",
+							1, 0
                       	);
                     };
                     let range = macro_range.range;
@@ -188,16 +179,14 @@ pub fn apply_macros(
                 "store" => {
                     let Some(name) = macro_range.arguments.first() else {
 						throw_error!((not_enough) 
-                        	'try_loop, try_stack, "store", 
-							2, 0,
-                       		macro_range.range.clone()
+                        	'try_loop, try_stack, "store",
+							2, 0
                       	);
                     };
                     let Some(value) = macro_range.arguments.get(1) else {
 						throw_error!((not_enough) 
-                        	'try_loop, try_stack, "store", 
-							2, 1,
-                       		macro_range.range.clone()
+                        	'try_loop, try_stack, "store",
+							2, 1
                       	);
                     };
                     let range = macro_range.range;
@@ -207,16 +196,14 @@ pub fn apply_macros(
                 "get" => {
                     let Some(name) = macro_range.arguments.first() else {
 						throw_error!((not_enough) 
-                        	'try_loop, try_stack, "get", 
-                        	2, 0,
-                        	macro_range.range.clone()
+                        	'try_loop, try_stack, "get",
+                        	2, 0
                       	);
                     };
                     let Some(value) = macro_range.arguments.get(1) else {
 						throw_error!((not_enough) 
-                        	'try_loop, try_stack, "get", 
-							2, 1,
-                       		macro_range.range.clone()
+                        	'try_loop, try_stack, "get",
+							2, 1
                       	);
                     };
                     let range = macro_range.range;
@@ -228,9 +215,8 @@ pub fn apply_macros(
                 "is_stored" => {
                     let Some(name) = macro_range.arguments.first() else {
 						throw_error!((not_enough) 
-                        	'try_loop, try_stack, "is_stored", 
-							1, 0,
-                       		macro_range.range.clone()
+                        	'try_loop, try_stack, "is_stored",
+							1, 0
                       	);
                    	};
                     let range = macro_range.range;
@@ -240,7 +226,7 @@ pub fn apply_macros(
                 other => {
                     let range = macro_range.range;
                     let Some(mac) = macros.get(other) else {
-						throw_error!((dne) 'try_loop, try_stack, other; range.clone());
+						throw_error!((dne) 'try_loop, try_stack, other);
                     };
                     let replace = match mac.apply(range.clone(), macro_range.arguments) {
                     	Ok(value) => value,
