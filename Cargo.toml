@@ -2,6 +2,9 @@
 name = "macroscript"
 version = "0.5.0"
 edition = "2021"
+authors = ["baltdev"]
+description = "A reimplementation of my macroscript programming language."
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
